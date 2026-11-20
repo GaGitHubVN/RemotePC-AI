@@ -37,7 +37,7 @@ auto-approves pairing; replays a synthetic H.264 clip). Screenshots are taken na
 |---|---|---|---|
 | iPhone 17 Pro Max, iOS 26.5 | `glass` — system UITabBarController tab bar, SwiftUI `.glass`/`.glassProminent` buttons, GlassEffectContainer toolbar | **TEST PASSED** (2 consecutive runs) | pair → WebRTC connected (direct LAN) → H.264 1280×720 decoded → tap reached host (`INPUT button left`) → chat RPC → fs.roots/fs.list → download 300 KiB SHA-256 ok → upload SHA-256 ok → native tab switch → settings shows "Liquid Glass · iOS 26" |
 | iPhone 16 Pro Max, iOS 18.6 | `cupertino` — iOS 18 design | **TEST PASSED** (2 consecutive runs) | same flow; settings shows "iOS 18" |
-| Android 14 emulator (Pixel 7 AVD, x86_64, on the dev PC; `scripts/test/mobile-e2e-android.ps1`) | `material` — Material 3 | **TEST PASSED** | same flow incl. video (1280×720, direct STUN path), tap → `INPUT button left`, download/upload SHA-256 ok, light + dark screenshots. CI job: emulator did not boot (runner disk space; fixed, not re-run — Actions billing limit) |
+| Android 14 emulator (Pixel 7 AVD, x86_64, on the dev PC; `scripts/test/mobile-e2e-android.ps1`) | `material` — Material 3 | **TEST PASSED** | same flow incl. video (1280×720, direct STUN path), tap → `INPUT button left`, download/upload SHA-256 ok, light + dark screenshots. CI job: boots now, but hung on the test host's screenshot call (adb not on PATH → HTTP loop died); fixed, not re-run |
 
 Bugs found and fixed by this suite: iOS crash on Connect (`"username": null` → NSNull inside flutter_webrtc), duplicate
 `connect()` from `initState` (notify during build), ICE candidates applied before the SDP answer (envelopes now handled in
@@ -49,7 +49,7 @@ order, candidates queued), list rows hidden under translucent navigation bars, m
 |---|---|---|
 | `releases/windows/RemotePC-AI-Windows-x64-Portable.zip` (single 89 MB exe) | **BUILD PASSED**, smoke-tested | started from an isolated temp folder with `--smoke-test`: exit 0, DPAPI identity created, LAN endpoint up; UI rendered (screenshot reviewed) |
 | `releases/android/RemotePC-AI-Android-release.apk` (122 MB, debug-key signed) | **BUILD PASSED** | `aapt2`: minSdk 28, targetSdk 36, ABIs arm64-v8a/armeabi-v7a/x86_64, permissions listed in ANDROID_BUILD.md |
-| `releases/ios/RemotePC-AI-iOS-unsigned.ipa` (14 MB, unsigned) | **BUILD PASSED** on GitHub Actions `macos-26`, Xcode 26.6, iOS SDK 26.5 | `flutter test` 6/6 on macOS; `lipo`: arm64 device binary; `otool LC_BUILD_VERSION`: platform 2 (iOS, not simulator), minos 18.0, sdk 26.5; bundle id `ai.remotepc.app`; frameworks App/Flutter/WebRTC/objective_c all arm64; SHA-256 `fe235a20…3a640e`. Installed on a device: **NOT VERIFIED** (needs your signing tool + iPhone) |
+| `releases/ios/RemotePC-AI-iOS-unsigned.ipa` (14 MB, unsigned, v0.2.0 build 2) | **BUILD PASSED** on GitHub Actions `macos-15`, Xcode 26.3, iOS SDK 26.2 (macos-26 arm64 had no capacity) | `flutter test` 8/8 on macOS; `lipo`: arm64 device binary; `LC_BUILD_VERSION`: platform 2 (iOS, not simulator), minos 18.0; Info.plist DTSDKName iphoneos26.2; bundle id `ai.remotepc.app`; contains the native Liquid Glass layer (GlassEffectContainer, glass views, native tab bar) and the crash fixes; SHA-256 `e1ba220a…26a784d`. Installed on a device: **NOT VERIFIED** (needs your signing tool + iPhone) |
 | Cloudflare Worker | **BUILD PASSED** (bundle) | `wrangler deploy --dry-run`; runtime **NOT VERIFIED** |
 | Signaling Docker image / TURN compose | **NOT VERIFIED** | Docker not installed on the dev PC |
 
