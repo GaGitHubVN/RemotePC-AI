@@ -86,6 +86,16 @@ public sealed class SecurityTests : IDisposable
     }
 
     [Fact]
+    public async Task Code_Offer_Works_While_A_Qr_Offer_Is_Also_Active_And_Both_Are_Consumed()
+    {
+        ApproveWith(Permission.ViewScreen);
+        var code = _pairing.CreateOffer(PairingMode.Code);
+        var qr = _pairing.CreateOffer(PairingMode.Qr);
+        Assert.True((bool)(await Submit(PairRequest(code)))["ok"]!);
+        Assert.Equal("expired", (string?)(await Submit(PairRequest(qr, pairNonce: "pn-after-0001")))["reason"]);
+    }
+
+    [Fact]
     public async Task Pairing_Offer_Is_Single_Use()
     {
         ApproveWith(Permission.ViewScreen);

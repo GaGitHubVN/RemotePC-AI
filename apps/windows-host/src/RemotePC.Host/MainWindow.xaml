@@ -1,12 +1,471 @@
 ﻿<Window x:Class="RemotePC.Host.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:RemotePC.Host"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        xmlns:vm="clr-namespace:RemotePC.Host.ViewModels"
+        xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+        Title="RemotePC AI" Width="1220" Height="800" MinWidth="980" MinHeight="640"
+        Background="{DynamicResource WindowBg}" FontFamily="{StaticResource UiFont}"
+        WindowStartupLocation="CenterScreen" d:DataContext="{d:DesignInstance vm:MainViewModel}"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="d">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolVis"/>
+        <vm:PageVisibility x:Key="PageVis"/>
+        <vm:BoolToBrush x:Key="OkBrush"/>
+    </Window.Resources>
     <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="248"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
+        <!-- ============ Sidebar ============ -->
+        <Border Background="{DynamicResource SidebarBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="20,22,20,22">
+                    <Border Width="38" Height="38" CornerRadius="10" Background="{DynamicResource BrandGradient}">
+                        <TextBlock Text="&#xE7F4;" FontFamily="{StaticResource IconFont}" Foreground="White" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="RemotePC AI" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding HostName}" Style="{StaticResource Muted}"/>
+                    </StackPanel>
+                </StackPanel>
+                <Border DockPanel.Dock="Bottom" Margin="14" Padding="12" CornerRadius="10" Background="{DynamicResource DangerSoft}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding L[security.title]}" FontWeight="SemiBold" FontSize="12"/>
+                        <Button Content="{Binding L[btn.emergency]}" Style="{StaticResource DangerButton}" Margin="0,8,0,0" Command="{Binding EmergencyCommand}"
+                                ToolTip="Ends every remote session and cancels every AI task immediately."/>
+                    </StackPanel>
+                </Border>
+                <StackPanel>
+                    <RadioButton Style="{StaticResource NavItem}" GroupName="nav" IsChecked="True" Command="{Binding NavigateCommand}" CommandParameter="dashboard">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE80F;" FontFamily="{StaticResource IconFont}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" Margin="0,0,12,0"/><TextBlock Text="{Binding L[nav.dashboard]}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="devices">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8EA;" FontFamily="{StaticResource IconFont}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" Margin="0,0,12,0"/><TextBlock Text="{Binding L[nav.devices]}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="sessions">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE7F4;" FontFamily="{StaticResource IconFont}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" Margin="0,0,12,0"/><TextBlock Text="{Binding L[nav.sessions]}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="ai">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE945;" FontFamily="{StaticResource IconFont}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" Margin="0,0,12,0"/><TextBlock Text="{Binding L[nav.ai]}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="agent">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE99A;" FontFamily="{StaticResource IconFont}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" Margin="0,0,12,0"/><TextBlock Text="{Binding L[nav.agent]}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="files">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8B7;" FontFamily="{StaticResource IconFont}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" Margin="0,0,12,0"/><TextBlock Text="{Binding L[nav.files]}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="security">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE72E;" FontFamily="{StaticResource IconFont}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" Margin="0,0,12,0"/><TextBlock Text="{Binding L[nav.security]}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="logs">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE9F9;" FontFamily="{StaticResource IconFont}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" Margin="0,0,12,0"/><TextBlock Text="{Binding L[nav.logs]}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" GroupName="nav" Command="{Binding NavigateCommand}" CommandParameter="settings">
+                        <StackPanel Orientation="Horizontal"><TextBlock Text="&#xE713;" FontFamily="{StaticResource IconFont}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}" Margin="0,0,12,0"/><TextBlock Text="{Binding L[nav.settings]}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"/></StackPanel>
+                    </RadioButton>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ============ Pages ============ -->
+        <Grid Grid.Column="1" x:Name="PageHost" Margin="28,24,14,0">
+            <Grid.RenderTransform><TranslateTransform x:Name="PageShift"/></Grid.RenderTransform>
+
+            <!-- Dashboard -->
+            <ScrollViewer Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=dashboard}" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <DockPanel Margin="0,0,14,18">
+                        <Button DockPanel.Dock="Right" Command="{Binding PairCommand}" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="&#xED14;" FontFamily="{StaticResource IconFont}" Foreground="White" Margin="0,0,8,0"/><TextBlock Text="{Binding L[btn.pair]}" Foreground="White"/></StackPanel>
+                        </Button>
+                        <StackPanel>
+                            <TextBlock Text="{Binding L[dash.title]}" Style="{StaticResource H1}"/>
+                            <TextBlock Text="{Binding L[dash.subtitle]}" Style="{StaticResource Muted}"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <UniformGrid Columns="4">
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal"><Ellipse Style="{StaticResource StatusDot}" Fill="{Binding Online, Converter={StaticResource OkBrush}}"/><TextBlock Text="{Binding OnlineText}" FontWeight="SemiBold"/></StackPanel>
+                                <TextBlock Text="{Binding L[dash.deviceId]}" Style="{StaticResource Muted}" Margin="0,10,0,0"/>
+                                <TextBox Text="{Binding DeviceId, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="11" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding L[dash.paired]}" Style="{StaticResource Muted}"/>
+                                <TextBlock Text="{Binding PairedCount}" Style="{StaticResource Metric}"/>
+                                <TextBlock Text="{Binding L[dash.sessions]}" Style="{StaticResource Muted}" Margin="0,6,0,0"/>
+                                <TextBlock Text="{Binding SessionCount}" Style="{StaticResource Metric}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding L[dash.cpu]}" Style="{StaticResource Muted}"/>
+                                <TextBlock Style="{StaticResource Metric}"><Run Text="{Binding Cpu, Mode=OneWay}"/><Run Text="%"/></TextBlock>
+                                <ProgressBar Value="{Binding Cpu, Mode=OneWay}" Height="4" Margin="0,4,0,8" Foreground="{DynamicResource Accent}" Background="{DynamicResource CardBorder}" BorderThickness="0"/>
+                                <TextBlock Text="{Binding L[dash.ram]}" Style="{StaticResource Muted}"/>
+                                <TextBlock Text="{Binding Ram}" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding L[dash.ai]}" Style="{StaticResource Muted}"/>
+                                <TextBlock Text="{Binding AiStatus}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding L[dash.model]}" Style="{StaticResource Muted}" Margin="0,8,0,0"/>
+                                <TextBlock Text="{Binding SelectedModel}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+                    <UniformGrid Columns="2">
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding L[dash.localIp]}" Style="{StaticResource Muted}"/>
+                                <TextBlock Text="{Binding LocalIps}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding L[dash.internet]}" Style="{StaticResource Muted}" Margin="0,8,0,0"/>
+                                <TextBlock Text="{Binding InternetState}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="{Binding L[dash.latency]}" Style="{StaticResource Muted}"/>
+                                <TextBlock Text="{Binding Latency}" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding L[dash.quality]}" Style="{StaticResource Muted}" Margin="0,8,0,0"/>
+                                <TextBlock Text="{Binding StreamQuality}" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding L[dash.recent]}" Style="{StaticResource H2}"/>
+                            <ItemsControl ItemsSource="{Binding Activity}" MaxHeight="260">
+                                <ItemsControl.Template><ControlTemplate><ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer></ControlTemplate></ItemsControl.Template>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,3">
+                                            <TextBlock DockPanel.Dock="Left" Width="70" Text="{Binding Time, StringFormat=HH:mm:ss}" Style="{StaticResource Muted}"/>
+                                            <TextBlock DockPanel.Dock="Left" Width="90" Text="{Binding Category}" Foreground="{DynamicResource Accent}" FontSize="12.5"/>
+                                            <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12.5"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Devices -->
+            <ScrollViewer Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=devices}" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <DockPanel Margin="0,0,14,18">
+                        <Button DockPanel.Dock="Right" Content="{Binding L[btn.pair]}" Command="{Binding PairCommand}" VerticalAlignment="Center"/>
+                        <StackPanel>
+                            <TextBlock Text="{Binding L[devices.title]}" Style="{StaticResource H1}"/>
+                            <TextBlock Text="{Binding L[devices.subtitle]}" Style="{StaticResource Muted}"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Style="{StaticResource Card}">
+                        <DockPanel>
+                            <TextBox DockPanel.Dock="Right" Width="60" Text="{Binding MaxSessions, UpdateSourceTrigger=LostFocus}"/>
+                            <TextBlock Text="{Binding L[devices.maxSessions]}" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
+                    <TextBlock Text="{Binding L[devices.empty]}" Style="{StaticResource Muted}" Margin="0,8">
+                        <TextBlock.Visibility><Binding Path="Devices.Count" Converter="{x:Static vm:ZeroToVisible.Instance}"/></TextBlock.Visibility>
+                    </TextBlock>
+                    <ItemsControl ItemsSource="{Binding Devices}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:DeviceVm">
+                                <Border Style="{StaticResource Card}">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                                <Button Content="{Binding DataContext.L[btn.rename], RelativeSource={RelativeSource AncestorType=Window}}" Style="{StaticResource Secondary}" Command="{Binding DataContext.RenameDeviceCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                <Button Content="{Binding DataContext.L[btn.revoke], RelativeSource={RelativeSource AncestorType=Window}}" Style="{StaticResource DangerButton}" Command="{Binding DataContext.RevokeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Style="{StaticResource StatusDot}" Fill="{Binding Connected, Converter={StaticResource OkBrush}}"/>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"/>
+                                                    <TextBlock Style="{StaticResource Muted}"><Run Text="{Binding Platform, Mode=OneWay}"/><Run Text=" · paired "/><Run Text="{Binding PairedAt, Mode=OneWay}"/><Run Text=" · last seen "/><Run Text="{Binding LastSeen, Mode=OneWay}"/></TextBlock>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </DockPanel>
+                                        <ItemsControl ItemsSource="{Binding Permissions}" Margin="0,12,0,0">
+                                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:PermissionToggle">
+                                                    <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding Enabled}" Margin="0,4,24,4"
+                                                              Content="{Binding Key, Converter={x:Static vm:LocKey.Instance}}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Sessions -->
+            <ScrollViewer Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=sessions}" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <DockPanel Margin="0,0,14,18">
+                        <Button DockPanel.Dock="Right" Content="{Binding L[btn.disconnectAll]}" Style="{StaticResource DangerButton}" Command="{Binding DisconnectAllCommand}" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding L[sessions.title]}" Style="{StaticResource H1}"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding L[sessions.empty]}" Style="{StaticResource Muted}">
+                        <TextBlock.Visibility><Binding Path="SessionsList.Count" Converter="{x:Static vm:ZeroToVisible.Instance}"/></TextBlock.Visibility>
+                    </TextBlock>
+                    <ItemsControl ItemsSource="{Binding SessionsList}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource Card}">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="{Binding DataContext.L[btn.disconnect], RelativeSource={RelativeSource AncestorType=Window}}" Style="{StaticResource DangerButton}"
+                                                Command="{Binding DataContext.DisconnectSessionCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" VerticalAlignment="Center"/>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Device}" FontWeight="SemiBold" FontSize="15"/>
+                                            <TextBlock Style="{StaticResource Muted}"><Run Text="started "/><Run Text="{Binding Started, Mode=OneWay}"/><Run Text=" · display "/><Run Text="{Binding Display, Mode=OneWay}"/><Run Text=" · RTT "/><Run Text="{Binding Rtt, Mode=OneWay}"/></TextBlock>
+                                            <TextBlock Text="{Binding Stream}" Style="{StaticResource Muted}"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Local AI -->
+            <ScrollViewer Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=ai}" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <StackPanel Margin="0,0,14,18">
+                        <TextBlock Text="{Binding L[ai.title]}" Style="{StaticResource H1}"/>
+                        <TextBlock Text="{Binding L[ai.subtitle]}" Style="{StaticResource Muted}"/>
+                    </StackPanel>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,10">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Content="{Binding L[btn.scan]}" Style="{StaticResource Secondary}" Command="{Binding ScanProvidersCommand}"/>
+                                    <Button Content="{Binding L[btn.refresh]}" Style="{StaticResource Secondary}" Command="{Binding RefreshModelsCommand}"/>
+                                    <Button Content="{Binding L[btn.test]}" Command="{Binding TestInferenceCommand}"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding L[ai.providers]}" Style="{StaticResource H2}"/>
+                            </DockPanel>
+                            <ItemsControl ItemsSource="{Binding Providers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,4">
+                                            <Ellipse Style="{StaticResource StatusDot}" Fill="{Binding Running, Converter={StaticResource OkBrush}}"/>
+                                            <TextBlock Width="160" Text="{Binding Name}" FontWeight="SemiBold"/>
+                                            <TextBlock Width="220" Text="{Binding Endpoint}" Style="{StaticResource Muted}"/>
+                                            <TextBlock Text="{Binding Status}" Style="{StaticResource Muted}"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{Binding AiTestResult}" Margin="0,10,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding L[ai.models]}" Style="{StaticResource H2}"/>
+                            <ListBox ItemsSource="{Binding Models}" SelectedItem="{Binding ModelSelection}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border x:Name="row" Padding="10,8" CornerRadius="8" Margin="0,2" Background="Transparent">
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Content="{Binding DataContext.L[btn.select], RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        Command="{Binding DataContext.SelectModelCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold"><Run Text="{Binding Id, Mode=OneWay}"/><Run Text="  "/><Run Text="{Binding ProviderId, Mode=OneWay}" Foreground="{DynamicResource TextSecondary}"/></TextBlock>
+                                                    <TextBlock Style="{StaticResource Muted}">
+                                                        <Run Text="{Binding DataContext.L[ai.ctx], RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"/><Run Text=": "/><Run Text="{Binding Context, Mode=OneWay}"/>
+                                                        <Run Text=" · "/><Run Text="{Binding DataContext.L[ai.tools], RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"/><Run Text=": "/><Run Text="{Binding Tools, Mode=OneWay}"/>
+                                                        <Run Text=" · "/><Run Text="{Binding DataContext.L[ai.vision], RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"/><Run Text=": "/><Run Text="{Binding Vision, Mode=OneWay}"/>
+                                                        <Run Text=" · "/><Run Text="{Binding Size, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </DockPanel>
+                                        </Border>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Selected}" Value="True">
+                                                <Setter TargetName="row" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <DockPanel>
+                            <TextBox DockPanel.Dock="Right" Width="60" Text="{Binding AiConcurrency}"/>
+                            <TextBlock Text="{Binding L[ai.concurrency]}" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Agent -->
+            <ScrollViewer Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=agent}" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <StackPanel Margin="0,0,14,18">
+                        <TextBlock Text="{Binding L[agent.title]}" Style="{StaticResource H1}"/>
+                        <TextBlock Text="{Binding L[agent.subtitle]}" Style="{StaticResource Muted}"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding L[agent.empty]}" Style="{StaticResource Muted}">
+                        <TextBlock.Visibility><Binding Path="Tasks.Count" Converter="{x:Static vm:ZeroToVisible.Instance}"/></TextBlock.Visibility>
+                    </TextBlock>
+                    <ItemsControl ItemsSource="{Binding Tasks}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource Card}">
+                                    <DockPanel>
+                                        <Button DockPanel.Dock="Right" Content="{Binding DataContext.L[agent.cancel], RelativeSource={RelativeSource AncestorType=Window}}" Style="{StaticResource Secondary}"
+                                                Command="{Binding DataContext.CancelTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" VerticalAlignment="Center"/>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Request}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                            <TextBlock Style="{StaticResource Muted}"><Run Text="{Binding State, Mode=OneWay}"/><Run Text=" · steps "/><Run Text="{Binding Steps, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Device, Mode=OneWay}"/></TextBlock>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Files -->
+            <ScrollViewer Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=files}" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <StackPanel Margin="0,0,14,18">
+                        <TextBlock Text="{Binding L[files.title]}" Style="{StaticResource H1}"/>
+                        <TextBlock Text="{Binding L[files.subtitle]}" Style="{StaticResource Muted}"/>
+                    </StackPanel>
+                    <Border Style="{StaticResource Card}">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="…" Style="{StaticResource Secondary}" Command="{Binding ChooseReceiveFolderCommand}"/>
+                            <StackPanel>
+                                <TextBlock Text="{Binding L[files.receiveFolder]}" Style="{StaticResource Muted}"/>
+                                <TextBlock Text="{Binding ReceiveFolder}" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding L[files.roots]}" Style="{StaticResource H2}"/>
+                            <ItemsControl ItemsSource="{Binding Roots}">
+                                <ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" Margin="0,3"/></DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Security -->
+            <ScrollViewer Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=security}" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="{Binding L[security.title]}" Style="{StaticResource H1}" Margin="0,0,0,18"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding Locked}" Content="{Binding L[security.lock]}" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding L[security.lockDesc]}" Style="{StaticResource Muted}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding L[security.agentPolicy]}" Style="{StaticResource H2}"/>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding PolicyAutoRead}" Content="{Binding L[security.autoRead]}"/>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding PolicyAutoWrite}" Content="{Binding L[security.autoWrite]}"/>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding PolicyReviewPlan}" Content="{Binding L[security.reviewPlan]}"/>
+                            <Button Content="{Binding L[btn.save]}" HorizontalAlignment="Left" Margin="0,10,0,0" Command="{Binding SavePolicyCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <WrapPanel>
+                            <Button Content="{Binding L[btn.disconnectAll]}" Style="{StaticResource Secondary}" Command="{Binding DisconnectAllCommand}"/>
+                            <Button Content="{Binding L[btn.revokeAll]}" Style="{StaticResource DangerButton}" Command="{Binding RevokeAllCommand}"/>
+                            <Button Content="{Binding L[btn.emergency]}" Style="{StaticResource DangerButton}" Command="{Binding EmergencyCommand}"/>
+                        </WrapPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Logs -->
+            <DockPanel Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=logs}">
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,14,18">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="{Binding L[btn.exportLogs]}" Style="{StaticResource Secondary}" Command="{Binding ExportLogsCommand}"/>
+                        <Button Content="{Binding L[btn.clearLogs]}" Style="{StaticResource DangerButton}" Command="{Binding ClearLogsCommand}"/>
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="{Binding L[logs.title]}" Style="{StaticResource H1}"/>
+                        <TextBlock Text="{Binding L[logs.subtitle]}" Style="{StaticResource Muted}"/>
+                    </StackPanel>
+                </DockPanel>
+                <Border Style="{StaticResource Card}">
+                    <ListBox ItemsSource="{Binding Activity}" VirtualizingPanel.IsVirtualizing="True">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Margin="0,3">
+                                    <TextBlock DockPanel.Dock="Left" Width="130" Text="{Binding Time, StringFormat=yyyy-MM-dd HH:mm:ss}" Style="{StaticResource Muted}"/>
+                                    <TextBlock DockPanel.Dock="Left" Width="100" Text="{Binding Category}" Foreground="{DynamicResource Accent}" FontSize="12.5"/>
+                                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" FontSize="12.5"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </DockPanel>
+
+            <!-- Settings -->
+            <ScrollViewer Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=settings}" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="{Binding L[settings.title]}" Style="{StaticResource H1}" Margin="0,0,0,18"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding L[settings.signaling]}" Style="{StaticResource Muted}"/>
+                            <TextBox Text="{Binding SignalingUrl}" Margin="0,4,0,10"/>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding LanEnabled}" Content="{Binding L[settings.lan]}"/>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding RemoteInput}" Content="{Binding L[settings.input]}"/>
+                            <DockPanel Margin="0,6">
+                                <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding Quality}"/>
+                                <TextBlock Text="{Binding L[settings.quality]}" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <DockPanel Margin="0,6">
+                                <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding ThemeOptions}" SelectedItem="{Binding Theme}"/>
+                                <TextBlock Text="{Binding L[settings.theme]}" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <DockPanel Margin="0,6">
+                                <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding LanguageOptions}" SelectedItem="{Binding Language}"/>
+                                <TextBlock Text="{Binding L[settings.language]}" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding ReducedMotion}" Content="{Binding L[settings.reducedMotion]}"/>
+                            <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding LaunchAtLogin}" Content="{Binding L[settings.autostart]}"/>
+                            <DockPanel Margin="0,6">
+                                <TextBox DockPanel.Dock="Right" Width="60" Text="{Binding RetentionDays}"/>
+                                <TextBlock Text="{Binding L[settings.retention]}" VerticalAlignment="Center"/>
+                            </DockPanel>
+                        </StackPanel>
+                    </Border>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
+                        <Button Content="{Binding L[btn.save]}" Command="{Binding SaveSettingsCommand}"/>
+                        <Button Content="{Binding L[btn.checkUpdate]}" Style="{StaticResource Secondary}" Command="{Binding CheckUpdateCommand}"/>
+                        <TextBlock Text="{Binding UpdateStatus}" VerticalAlignment="Center" Style="{StaticResource Muted}"/>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </Window>

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/RemotePC.Core/RemotePC.Core.csproj" />
+    <Project Path="src/RemotePC.Host/RemotePC.Host.csproj" />
     <Project Path="src/RemotePC.Platform.Windows/RemotePC.Platform.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">

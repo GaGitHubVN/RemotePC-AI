@@ -31,7 +31,7 @@ public sealed class PairingManager(DeviceKeys host, DeviceStore store, TimeProvi
     public const int MaxFailuresPerOffer = 5;
 
     private readonly Lock _lock = new();
-    private PairingOffer? _offer;
+    private readonly List<PairingOffer> _offers = [];
     private readonly Queue<DateTimeOffset> _recentFailures = new();
 
     /// <summary>Asks the UI to approve. Must return within a reasonable time; null/timeout = rejected.</summary>
@@ -39,7 +39,7 @@ public sealed class PairingManager(DeviceKeys host, DeviceStore store, TimeProvi
 
     public PairingOffer? CurrentOffer
     {
-        get { lock (_lock) return IsLive(_offer) ? _offer : null; }
+        get { lock (_lock) return _offers.FirstOrDefault(IsLive); }
     }
 
     public PairingOffer CreateOffer(PairingMode mode)
@@ -54,13 +54,17 @@ public sealed class PairingManager(DeviceKeys host, DeviceStore store, TimeProvi
             var code = PairingCrypto.GenerateCode();
             offer = new PairingOffer { Mode = mode, Secret = Enc.Utf8(code), DisplayCode = PairingCrypto.FormatCode(code), ExpiresAt = time.GetUtcNow() + OfferLifetime };
         }
-        lock (_lock) _offer = offer;
+        lock (_lock)
+        {
+            _offers.RemoveAll(o => o.Mode == mode || !IsLive(o));
+            _offers.Add(offer);
+        }
         return offer;
     }
 
     public void CancelOffer()
     {
-        lock (_lock) _offer = null;
+        lock (_lock) _offers.Clear();
     }
 
     public string BuildQrUri(PairingOffer offer, string hostName, string? signalingUrl, IEnumerable<string> lanEndpoints)
@@ -100,21 +104,23 @@ public sealed class PairingManager(DeviceKeys host, DeviceStore store, TimeProvi
             var now = time.GetUtcNow();
             while (_recentFailures.Count > 0 && now - _recentFailures.Peek() > TimeSpan.FromMinutes(1)) _recentFailures.Dequeue();
             if (_recentFailures.Count >= 20) return Fail("locked");
-            if (_offer is null) return Fail("expired");
-            if (!IsLive(_offer)) return Fail(_offer.Failures >= MaxFailuresPerOffer ? "locked" : "expired");
-            offer = _offer;
+            var live = _offers.Where(IsLive).ToList();
+            if (live.Count == 0) return Fail(_offers.Any(o => o.Failures >= MaxFailuresPerOffer) ? "locked" : "expired");
 
             transcript = PairingCrypto.Transcript(host.DeviceId, env.From, env.Kx.EdPk, env.Kx.XPk,
                 Enc.B64u(host.EdPk), Enc.B64u(host.XPk), pairNonce);
-            var expected = PairingCrypto.Proof(offer.Secret, transcript);
             byte[] given;
             try { given = Enc.FromB64u(proofStr); } catch (FormatException) { given = []; }
-            if (!CryptographicOperations.FixedTimeEquals(expected, given))
+            var matched = live.FirstOrDefault(o => CryptographicOperations.FixedTimeEquals(PairingCrypto.Proof(o.Secret, transcript), given));
+            if (matched is null)
             {
-                offer.Failures++;
+                // A wrong guess counts against every live offer (an attacker cannot spread guesses across them).
+                foreach (var o in live) o.Failures++;
                 _recentFailures.Enqueue(now);
                 return Fail("bad_proof");
             }
+            offer = matched;
+            foreach (var o in _offers) o.Used = true; // pairing done: all current offers are consumed
             offer.Used = true; // single use, even if the owner rejects
         }
 
