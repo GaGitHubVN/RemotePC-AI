@@ -9,7 +9,7 @@ Date: 2026-11-20 · Commit: see `git log -1` · Status values as defined in the 
 | Dev PC | Windows 11 Pro 10.0.26300, Intel Iris Xe (Intel Quick Sync), 1 monitor 1920×1080, 15.7 GB RAM |
 | Toolchain | .NET SDK 10.0.115, Node 26.13, Flutter 3.50.1 / Dart 3.14, Android SDK 36/37, NDK 28.2, Android Studio JBR (OpenJDK 25.0.4) |
 | Local AI | Ollama 0.40.16 with `qwen2.5:0.5b` (pulled for testing; remove with `ollama rm qwen2.5:0.5b`) |
-| Phones | **none available** — no physical device, no emulator system image, no Mac |
+| Phones | none physical — mobile E2E runs on GitHub-hosted iOS Simulators (macOS 26 runner) |
 
 ## Automated suites (all run on the dev PC)
 
@@ -27,6 +27,21 @@ Date: 2026-11-20 · Commit: see `git log -1` · Status values as defined in the 
 Measured numbers (dev PC, not targets): QSV encode 9.0 ms/frame and CPU BGRA→NV12 7.9 ms at 1080p→720p; software MFT 2.6 ms;
 SCTP file throughput between two SIPSorcery peers on loopback **205 KiB/s** (slow — known limitation); `ctl` ping during a
 bulk upload 57 ms.
+
+## Mobile end-to-end on iOS Simulators (GitHub Actions, workflow `mobile-e2e`)
+
+The real app runs on a simulator against `tools/RemotePC.TestHost` (real RemotePC.Core over loopback; CI-only,
+auto-approves pairing; replays a synthetic H.264 clip). Screenshots are taken natively (`xcrun simctl io`) by the host.
+
+| Simulator | UI branch chosen at runtime | Result | Evidence |
+|---|---|---|---|
+| iPhone 17 Pro Max, iOS 26.5 | `glass` — system UITabBarController tab bar, SwiftUI `.glass`/`.glassProminent` buttons, GlassEffectContainer toolbar | **TEST PASSED** (2 consecutive runs) | pair → WebRTC connected (direct LAN) → H.264 1280×720 decoded → tap reached host (`INPUT button left`) → chat RPC → fs.roots/fs.list → download 300 KiB SHA-256 ok → upload SHA-256 ok → native tab switch → settings shows "Liquid Glass · iOS 26" |
+| iPhone 16 Pro Max, iOS 18.6 | `cupertino` — iOS 18 design | **TEST PASSED** (2 consecutive runs) | same flow; settings shows "iOS 18" |
+| Android 14 emulator | `material` | **NOT VERIFIED** | emulator did not boot on the runner (disk space; workflow fixed but not re-run — Actions billing limit reached) |
+
+Bugs found and fixed by this suite: iOS crash on Connect (`"username": null` → NSNull inside flutter_webrtc), duplicate
+`connect()` from `initState` (notify during build), ICE candidates applied before the SDP answer (envelopes now handled in
+order, candidates queued), list rows hidden under translucent navigation bars, missing Cupertino icon font.
 
 ## Builds / artifacts
 
