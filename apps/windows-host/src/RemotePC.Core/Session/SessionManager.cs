@@ -83,6 +83,8 @@ public sealed class SessionManager
                     if (!TryGetSession(msg, out var s)) return;
                     var sdp = (string?)msg.Payload["sdp"];
                     if (string.IsNullOrEmpty(sdp) || sdp.Length > 32_000) return;
+                    Interlocked.Increment(ref s.NegotiationStep);
+                    _ = ExpireIfNotConnectedAsync(s);
                     var answer = await s.HandleOfferAsync(sdp).ConfigureAwait(false);
                     if (answer is null) { await CloseSessionAsync(s, "bad_offer").ConfigureAwait(false); return; }
                     SendToDevice(msg.From, "webrtc.answer", s.Id, new JsonObject { ["sdp"] = answer });
@@ -169,8 +171,10 @@ public sealed class SessionManager
 
     private async Task ExpireIfNotConnectedAsync(HostSession s)
     {
+        // Each negotiation step restarts the 45 s window; only the latest timer may close the session.
+        var step = Volatile.Read(ref s.NegotiationStep);
         await Task.Delay(TimeSpan.FromSeconds(45)).ConfigureAwait(false);
-        if (s.State == SessionState.Negotiating) await CloseSessionAsync(s, "connect_timeout").ConfigureAwait(false);
+        if (s.State == SessionState.Negotiating && Volatile.Read(ref s.NegotiationStep) == step) await CloseSessionAsync(s, "connect_timeout").ConfigureAwait(false);
     }
 
     internal static JsonNode IceJson(RTCIceServer s)

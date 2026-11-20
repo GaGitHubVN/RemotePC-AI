@@ -35,6 +35,9 @@ public sealed class HostSession : IAsyncDisposable
     public string ResumeToken { get; }
     public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
     public SessionState State { get; private set; } = SessionState.Negotiating;
+
+    /// <summary>Bumped on each negotiation step (open, offer) so slow phones get a fresh connect window.</summary>
+    internal int NegotiationStep;
     public int DisplayIndex { get; private set; }
     public double? InputRttMs { get; private set; }
     public StreamStats? Stats => _stream?.Stats;
