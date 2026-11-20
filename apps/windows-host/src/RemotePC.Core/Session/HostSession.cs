@@ -63,7 +63,7 @@ public sealed class HostSession : IAsyncDisposable
             _mgr.SendToDevice(DeviceId, "webrtc.ice", Id, new JsonObject
             {
                 ["candidate"] = "candidate:" + c.ToString(),
-                ["sdpMid"] = c.sdpMid,
+                ["sdpMid"] = c.sdpMid ?? "0",
                 ["sdpMLineIndex"] = c.sdpMLineIndex,
             });
         };

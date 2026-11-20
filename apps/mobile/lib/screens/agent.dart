@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../core/host_link.dart';
 import '../core/storage.dart';
 import '../l10n.dart';
+import '../ui/adaptive.dart';
+import '../ui/platform_ui.dart';
 import '../ui/theme.dart';
 
 class AgentTasksScreen extends StatefulWidget {
@@ -21,9 +24,13 @@ class _AgentTasksScreenState extends State<AgentTasksScreen> {
   List<dynamic> _tasks = [];
   List<dynamic> _templates = [];
   StreamSubscription? _sub;
+  final _ctl = TextEditingController();
 
   Future<void> _load() async {
-    if (!link.isConnected) return;
+    if (!link.isConnected) {
+      if (mounted) setState(() {});
+      return;
+    }
     try {
       final r = await link.call('agent.list');
       final tpl = _templates.isEmpty ? await link.call('agent.templates') : null;
@@ -34,7 +41,7 @@ class _AgentTasksScreenState extends State<AgentTasksScreen> {
         });
       }
     } on RpcError catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) showToast(context, e.message);
     }
   }
 
@@ -53,60 +60,77 @@ class _AgentTasksScreenState extends State<AgentTasksScreen> {
     super.dispose();
   }
 
-  Future<void> _start(String request) async {
+  Future<void> _start() async {
+    final request = _ctl.text.trim();
+    if (request.isEmpty) return;
     try {
       final t = await link.call('agent.run', {'request': request});
-      if (mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => AgentTaskScreen(host: widget.host, taskId: t['id'])));
+      _ctl.clear();
+      if (mounted) pushPage(context, AgentTaskScreen(host: widget.host, taskId: t['id']));
     } on RpcError catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      if (mounted) showToast(context, e.message);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final ctl = TextEditingController();
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('tasks'))),
-      body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+    final p = Palette.of(context);
+    return AppPage(title: tr('tasks'), onRefresh: _load, slivers: [
+      SliverList.list(children: [
         Padding(
-          padding: const EdgeInsets.all(16),
-          child: TextField(
-            controller: ctl,
-            minLines: 1,
-            maxLines: 4,
-            decoration: InputDecoration(hintText: 'Ví dụ: Tạo thư mục Homework trên Desktop', suffixIcon: IconButton(icon: const Icon(Icons.send), onPressed: () => _start(ctl.text.trim()))),
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: AdaptiveTextField(controller: _ctl, placeholder: tr('agent_hint'), minLines: 2, maxLines: 5, capitalization: TextCapitalization.sentences),
         ),
+        Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: PrimaryButton(id: 'agent-run', label: tr('agent_mode'), icon: Ic.agent, onPressed: link.isConnected ? _start : null)),
         if (_templates.isNotEmpty)
           SizedBox(
             height: 44,
             child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12), children: [
-              for (final t in _templates) Padding(padding: const EdgeInsets.all(4), child: ActionChip(label: Text(t['title']), onPressed: () => ctl.text = t['request'])),
+              for (final t in _templates)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: PlatformUi.isIOS
+                      ? CupertinoButton.tinted(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          minimumSize: const Size(0, 36),
+                          borderRadius: BorderRadius.circular(18),
+                          onPressed: () => _ctl.text = t['request'],
+                          child: Text(t['title'], style: const TextStyle(fontSize: 14)),
+                        )
+                      : ActionChip(label: Text(t['title']), onPressed: () => _ctl.text = t['request']),
+                ),
             ]),
           ),
-        if (_tasks.isEmpty) Padding(padding: const EdgeInsets.all(32), child: Center(child: Text(link.isConnected ? 'No tasks yet.' : tr('offline')))),
-        for (final t in _tasks)
-          Card(
-            child: ListTile(
-              leading: _stateIcon(context, t['state']),
-              title: Text(t['request'], maxLines: 2, overflow: TextOverflow.ellipsis),
-              subtitle: Text('${t['state']} · ${(t['steps'] as List).length} steps'),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AgentTaskScreen(host: widget.host, taskId: t['id']))),
-            ),
-          ),
+        const SizedBox(height: 8),
+        if (!link.isConnected) const Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 8), child: ProgressLine()),
+        if (_tasks.isEmpty)
+          Padding(padding: const EdgeInsets.all(32), child: Center(child: Text(link.isConnected ? tr('no_tasks') : tr('offline'), style: TextStyle(color: p.secondary))))
+        else
+          Section(children: [
+            for (final t in _tasks)
+              Tile(
+                title: t['request'],
+                subtitle: '${t['state']} · ${(t['steps'] as List).length} ${tr('steps')}',
+                leading: stateIcon(context, t['state']),
+                onTap: () => pushPage(context, AgentTaskScreen(host: widget.host, taskId: t['id'])),
+              ),
+          ]),
       ]),
-    );
+    ]);
   }
 }
 
-Widget _stateIcon(BuildContext c, String s) => switch (s) {
-      'Completed' => const Icon(Icons.check_circle, color: Colors.green),
-      'Failed' => Icon(Icons.error, color: Theme.of(c).colorScheme.error),
-      'Cancelled' => const Icon(Icons.cancel, color: Colors.grey),
-      'WaitingForApproval' => const Icon(Icons.pending_actions, color: Colors.orange),
-      'Paused' => const Icon(Icons.pause_circle),
-      _ => const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
-    };
+Widget stateIcon(BuildContext c, String s) {
+  final p = Palette.of(c);
+  return switch (s) {
+    'Completed' => Icon(Ic.ok.data, color: p.success),
+    'Failed' => Icon(Ic.error.data, color: p.danger),
+    'Cancelled' => Icon(Ic.close.data, color: p.secondary),
+    'WaitingForApproval' => Icon(Ic.clock.data, color: p.warning),
+    'Paused' => Icon(Ic.pause.data, color: p.secondary),
+    _ => const Spinner(size: 20),
+  };
+}
 
 /// Live view of one task: plan, timeline, screenshots, approvals, pause/resume/cancel.
 class AgentTaskScreen extends StatefulWidget {
@@ -159,43 +183,44 @@ class _AgentTaskScreenState extends State<AgentTaskScreen> {
     final planCtl = TextEditingController(text: a['detail']);
     final isPlan = a['kind'] == 'plan';
     final risk = a['risk'] as String;
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isDismissible: false,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (c) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(c).viewInsets.bottom),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(risk == 'Sensitive' ? Icons.warning_amber_rounded : Icons.shield_outlined, color: risk == 'Sensitive' ? Colors.red : Colors.orange),
+    final sensitive = risk == 'Sensitive';
+    final ok = await showPanel<bool>(context, title: tr('approval_needed'), dismissible: false, children: (c) {
+      final p = Palette.of(c);
+      return [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: Row(children: [
+            Icon(sensitive ? Ic.warning.data : Ic.shield.data, color: sensitive ? p.danger : p.warning),
             const SizedBox(width: 8),
-            Expanded(child: Text(tr('approval_needed'), style: Theme.of(c).textTheme.titleMedium)),
-            Chip(label: Text(risk)),
-          ]),
-          const SizedBox(height: 8),
-          Text(a['title'], style: Theme.of(c).textTheme.titleSmall),
-          const SizedBox(height: 8),
-          if (isPlan)
-            TextField(controller: planCtl, maxLines: 8, minLines: 3)
-          else
+            Expanded(child: Text(a['title'], style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: p.label))),
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Theme.of(c).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(10)),
-              child: SelectableText(a['detail'], style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: (sensitive ? p.danger : p.warning).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(12)),
+              child: Text(risk, style: TextStyle(fontSize: 12, color: sensitive ? p.danger : p.warning, fontWeight: FontWeight.w600)),
             ),
-          const SizedBox(height: 16),
-          Row(children: [
-            Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(c, false), child: Text(tr('reject')))),
-            const SizedBox(width: 12),
-            Expanded(child: FilledButton(
-                style: risk == 'Sensitive' ? FilledButton.styleFrom(backgroundColor: Colors.red) : null,
-                onPressed: () => Navigator.pop(c, true), child: Text(tr('approve')))),
           ]),
-        ]),
-      ),
-    );
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: isPlan
+              ? AdaptiveTextField(controller: planCtl, minLines: 4, maxLines: 10)
+              : Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: p.card, borderRadius: BorderRadius.circular(PlatformUi.isGlass ? 20 : 12)),
+                  child: SelectableText(a['detail'], style: TextStyle(fontFamily: PlatformUi.isIOS ? 'Menlo' : 'monospace', fontSize: 12, color: p.label)),
+                ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(children: [
+            Expanded(child: PrimaryButton(id: 'reject', label: tr('reject'), secondary: true, onPressed: () => Navigator.of(c).pop(false))),
+            const SizedBox(width: 12),
+            Expanded(child: PrimaryButton(id: 'approve', label: tr('approve'), destructive: sensitive, onPressed: () => Navigator.of(c).pop(true))),
+          ]),
+        ),
+      ];
+    });
     try {
       await link.call('agent.approve', {'taskId': widget.taskId, 'approvalId': a['approvalId'], 'approved': ok == true, if (isPlan && ok == true) 'plan': planCtl.text});
     } on RpcError catch (_) {}
@@ -211,32 +236,35 @@ class _AgentTaskScreenState extends State<AgentTaskScreen> {
   @override
   Widget build(BuildContext context) {
     final t = _task;
-    final th = Theme.of(context);
+    final p = Palette.of(context);
     final running = t != null && !['Completed', 'Failed', 'Cancelled'].contains(t['state']);
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('tasks')), actions: [
-        if (running && t['state'] != 'Paused')
-          IconButton(tooltip: tr('pause'), icon: const Icon(Icons.pause), onPressed: () => link.call('agent.pause', {'taskId': widget.taskId, 'pause': true})),
-        if (running && t['state'] == 'Paused')
-          IconButton(tooltip: tr('resume'), icon: const Icon(Icons.play_arrow), onPressed: () => link.call('agent.pause', {'taskId': widget.taskId, 'pause': false})),
-        if (running) IconButton(tooltip: tr('cancel'), icon: const Icon(Icons.stop_circle_outlined), onPressed: () => link.call('agent.cancel', {'taskId': widget.taskId})),
-      ]),
-      body: t == null
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(padding: const EdgeInsets.all(16), children: [
-              Text(t['request'], style: th.textTheme.titleMedium),
+    final radius = PlatformUi.isGlass ? 22.0 : (PlatformUi.isIOS ? 12.0 : 18.0);
+    return AppPage(
+      title: tr('tasks'),
+      actions: [
+        if (running && t['state'] != 'Paused') BarItem('pause', Ic.pause, tr('pause'), () => link.call('agent.pause', {'taskId': widget.taskId, 'pause': true})),
+        if (running && t['state'] == 'Paused') BarItem('resume', Ic.play, tr('resume'), () => link.call('agent.pause', {'taskId': widget.taskId, 'pause': false})),
+        if (running) BarItem('cancel', Ic.stop, tr('cancel'), () => link.call('agent.cancel', {'taskId': widget.taskId}), destructive: true),
+      ],
+      slivers: [
+        if (t == null)
+          const SliverFillRemaining(child: Center(child: Spinner(size: 28)))
+        else
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverList.list(children: [
+              Text(t['request'], style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: p.label)),
               const SizedBox(height: 8),
-              Row(children: [_stateIcon(context, t['state']), const SizedBox(width: 8), Text(t['state'])]),
-              if (t['approval'] != null)
-                Card(
-                  color: th.colorScheme.tertiaryContainer,
-                  child: ListTile(leading: const Icon(Icons.pending_actions), title: Text(tr('approval_needed')), subtitle: Text(t['approval']['title']),
-                      onTap: () => _showApproval(Map<String, dynamic>.from(t['approval']))),
-                ),
-              if (t['plan'] != null) ...[
+              Row(children: [stateIcon(context, t['state']), const SizedBox(width: 8), Text(t['state'], style: TextStyle(color: p.secondary))]),
+              if (t['approval'] != null) ...[
                 const SizedBox(height: 12),
-                Text('Plan', style: th.textTheme.labelLarge),
-                Text(t['plan']),
+                PrimaryButton(id: 'open-approval', label: '${tr('approval_needed')}: ${t['approval']['title']}', icon: Ic.shield, onPressed: () => _showApproval(Map<String, dynamic>.from(t['approval']))),
+              ],
+              if (t['plan'] != null) ...[
+                const SizedBox(height: 16),
+                Text(tr('plan'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.secondary)),
+                const SizedBox(height: 4),
+                Text(t['plan'], style: TextStyle(color: p.label)),
               ],
               const SizedBox(height: 16),
               for (final s in t['steps'] as List)
@@ -244,27 +272,37 @@ class _AgentTaskScreenState extends State<AgentTaskScreen> {
                   duration: Motion.medium,
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: th.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(14)),
+                  decoration: BoxDecoration(color: p.card, borderRadius: BorderRadius.circular(radius)),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      Icon(switch (s['status']) { 'ok' => Icons.check_circle, 'running' => Icons.timelapse, 'rejected' || 'denied' => Icons.block, _ => Icons.error_outline },
-                          size: 18, color: s['status'] == 'ok' ? Colors.green : (s['status'] == 'running' ? null : th.colorScheme.error)),
+                      Icon(
+                        switch (s['status']) { 'ok' => Ic.ok.data, 'running' => Ic.clock.data, 'rejected' || 'denied' => Ic.close.data, _ => Ic.error.data },
+                        size: 18,
+                        color: s['status'] == 'ok' ? p.success : (s['status'] == 'running' ? p.secondary : p.danger),
+                      ),
                       const SizedBox(width: 6),
-                      Expanded(child: Text(s['description'], style: const TextStyle(fontWeight: FontWeight.w600))),
-                      if (s['verified'] == true) const Tooltip(message: 'verified', child: Icon(Icons.verified, size: 16, color: Colors.green)),
+                      Expanded(child: Text(s['description'], style: TextStyle(fontWeight: FontWeight.w600, color: p.label))),
+                      if (s['verified'] == true) Icon(Ic.verified.data, size: 16, color: p.success),
                     ]),
-                    Text(s['tool'], style: th.textTheme.labelSmall),
-                    if (s['result'] != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(s['result'], maxLines: 6, overflow: TextOverflow.ellipsis, style: th.textTheme.bodySmall)),
-                    if (s['error'] != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(s['error'], style: TextStyle(color: th.colorScheme.error, fontSize: 12))),
+                    Text(s['tool'], style: TextStyle(fontSize: 12, color: p.secondary)),
+                    if (s['result'] != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(s['result'], maxLines: 6, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: p.label))),
+                    if (s['error'] != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(s['error'], style: TextStyle(color: p.danger, fontSize: 12))),
                     if (s['hasImage'] == true)
                       _images[s['index']] != null
                           ? Padding(padding: const EdgeInsets.only(top: 8), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(base64Decode(_images[s['index']]!))))
-                          : TextButton.icon(onPressed: () => _loadImage(s['index']), icon: const Icon(Icons.image), label: const Text('Show screenshot')),
+                          : LinkButton(label: tr('show_screenshot'), icon: Ic.image, onPressed: () => _loadImage(s['index'])),
                   ]),
                 ),
-              if (t['answer'] != null) Card(child: Padding(padding: const EdgeInsets.all(14), child: SelectableText(t['answer']))),
-              if (t['error'] != null) Text(t['error'], style: TextStyle(color: th.colorScheme.error)),
+              if (t['answer'] != null)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: p.card, borderRadius: BorderRadius.circular(radius)),
+                  child: SelectableText(t['answer'], style: TextStyle(color: p.label)),
+                ),
+              if (t['error'] != null) Text(t['error'], style: TextStyle(color: p.danger)),
             ]),
+          ),
+      ],
     );
   }
 }

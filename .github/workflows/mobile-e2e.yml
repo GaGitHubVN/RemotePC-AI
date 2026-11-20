@@ -1,0 +1,149 @@
+name: Mobile E2E (iOS Simulator)
+
+# Runs the real app on iOS Simulators against tools/RemotePC.TestHost (real RemotePC.Core over loopback):
+# pairing → WebRTC video → input → RPC → file transfer, plus native screenshots of each screen.
+#  • iOS 26 simulator → must render the Liquid Glass branch (native UITabBarController + SwiftUI glass)
+#  • iOS 18 simulator → must render the iOS 18 (Cupertino) branch
+# A simulator is not a device: this proves the code paths and UI branches, not performance on hardware.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['apps/mobile/**', 'apps/windows-host/src/RemotePC.Core/**', 'apps/windows-host/tools/**', '.github/workflows/mobile-e2e.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ios26
+            runner: macos-26
+            os: '26'
+            style: glass
+          - name: ios18
+            runner: macos-26
+            os: '18'
+            style: cupertino
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode >= 26 (iOS 26 SDK is needed to compile the glass code)
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sed -E 's/.*Xcode_([0-9.]+)\.app/\1 &/' | sort -V | tail -1 | cut -d' ' -f2)
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - name: Pick an iPhone simulator running iOS ${{ matrix.os }}
+        id: sim
+        run: |
+          set -e
+          pick() {
+            xcrun simctl list devices available -j | python3 -c "
+          import json,sys,re
+          want=sys.argv[1]
+          d=json.load(sys.stdin)['devices']
+          best=None
+          for rt,devs in d.items():
+              m=re.search(r'iOS-(\d+)-(\d+)',rt)
+              if not m or m.group(1)!=want: continue
+              for x in devs:
+                  if x['name'].startswith('iPhone') and 'Pro' in x['name']:
+                      key=(int(m.group(2)),x['name'])
+                      if best is None or key>best[0]: best=(key,x['udid'],x['name'],rt)
+          if best: print(best[1]+'|'+best[2]+'|'+best[3])
+          " "$1"
+          }
+          R=$(pick ${{ matrix.os }} || true)
+          if [ -z "$R" ]; then
+            echo "No iOS ${{ matrix.os }} simulator runtime on this image — downloading it."
+            sudo xcodebuild -downloadPlatform iOS -buildVersion ${{ matrix.os }}.6 || sudo xcodebuild -downloadPlatform iOS -buildVersion ${{ matrix.os }}.5 || true
+            RT=$(xcrun simctl list runtimes -j | python3 -c "import json,sys;r=[x for x in json.load(sys.stdin)['runtimes'] if x['version'].startswith('${{ matrix.os }}.') and x['isAvailable']];print(r[-1]['identifier'] if r else '')")
+            if [ -z "$RT" ]; then echo "::error::iOS ${{ matrix.os }} runtime unavailable"; exit 1; fi
+            xcrun simctl create "iPhone 16 Pro (iOS ${{ matrix.os }})" "com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro" "$RT"
+            R=$(pick ${{ matrix.os }})
+          fi
+          UDID=${R%%|*}
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Simulator: $R"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 || true
+          xcrun simctl ui "$UDID" appearance light || true
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Start RemotePC.TestHost (CI-only, auto-approves pairing)
+        run: |
+          dotnet build apps/windows-host/tools/RemotePC.TestHost -c Release
+          nohup dotnet apps/windows-host/tools/RemotePC.TestHost/bin/Release/net10.0/RemotePC.TestHost.dll 45900 /tmp/pair.txt > /tmp/testhost.log 2>&1 &
+          for i in $(seq 1 60); do [ -s /tmp/pair.txt ] && break; sleep 1; done
+          test -s /tmp/pair.txt
+          cat /tmp/testhost.log
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.50.1
+          channel: stable
+          cache: true
+
+      - name: Run integration test on the simulator (screenshots on SHOT markers)
+        working-directory: apps/mobile
+        run: |
+          flutter pub get
+          mkdir -p "$GITHUB_WORKSPACE/shots"
+          URI=$(cat /tmp/pair.txt)
+          UDID=${{ steps.sim.outputs.udid }}
+          set -o pipefail
+          flutter test integration_test/app_test.dart -d "$UDID" \
+            --dart-define=PAIR_URI="$URI" --dart-define=EXPECT_STYLE=${{ matrix.style }} 2>&1 | while IFS= read -r line; do
+            echo "$line"
+            case "$line" in
+              *SHOT:*)
+                n="${line##*SHOT:}"; n="${n%%[^A-Za-z0-9_-]*}"
+                sleep 0.5
+                xcrun simctl io "$UDID" screenshot "$GITHUB_WORKSPACE/shots/${{ matrix.name }}-$n.png" >/dev/null 2>&1 || echo "screenshot failed: $n"
+                ;;
+            esac
+          done
+
+      - name: Dark mode screenshot of the home screen
+        if: success()
+        run: |
+          UDID=${{ steps.sim.outputs.udid }}
+          xcrun simctl ui "$UDID" appearance dark
+          xcrun simctl launch "$UDID" ai.remotepc.app || true
+          sleep 6
+          xcrun simctl io "$UDID" screenshot "$GITHUB_WORKSPACE/shots/${{ matrix.name }}-09-dark.png" || true
+
+      - name: Assert the host saw the phone's input and transfers
+        if: success()
+        run: |
+          cat /tmp/testhost.log
+          grep -q "pairing result ok=True" /tmp/testhost.log
+          grep -q "INPUT button left" /tmp/testhost.log
+          grep -q "upload completed upload-test.txt" /tmp/testhost.log
+          grep -q "download started Documents/report.bin" /tmp/testhost.log
+
+      - name: Collect crash reports
+        if: always()
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/shots/crash"
+          cp ~/Library/Logs/DiagnosticReports/*Runner* "$GITHUB_WORKSPACE/shots/crash/" 2>/dev/null || true
+          cp /tmp/testhost.log "$GITHUB_WORKSPACE/shots/" 2>/dev/null || true
+          ls -la "$GITHUB_WORKSPACE/shots" "$GITHUB_WORKSPACE/shots/crash"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-${{ matrix.name }}
+          path: shots/

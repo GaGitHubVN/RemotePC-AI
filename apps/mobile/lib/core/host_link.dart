@@ -59,6 +59,29 @@ class PairingInvite {
         secret: utf8Bytes(code), lan: ['${discovered['address']}:${discovered['ws']}'], isCode: true);
 }
 
+/// Keeps only well-formed string fields. flutter_webrtc's iOS code checks `!= nil`, so a JSON null becomes
+/// NSNull and crashes the app inside RTCIceServer (older hosts sent `"username": null` for STUN entries).
+List<Map<String, dynamic>> sanitizeIceServers(List<dynamic> raw) {
+  final out = <Map<String, dynamic>>[];
+  for (final s in raw) {
+    if (s is! Map) continue;
+    final u = s['urls'];
+    final urls = (u is String ? [u] : u is List ? u : const [])
+        .whereType<String>()
+        .map((x) => x.trim())
+        .where((x) => x.startsWith('stun:') || x.startsWith('turn:') || x.startsWith('turns:'))
+        .toList();
+    if (urls.isEmpty) continue;
+    final user = s['username'], cred = s['credential'];
+    out.add({
+      'urls': urls,
+      if (user is String && user.isNotEmpty) 'username': user,
+      if (cred is String && cred.isNotEmpty) 'credential': cred,
+    });
+  }
+  return out;
+}
+
 /// Connection to one paired Windows host.
 class HostLink extends ChangeNotifier {
   final DeviceKeys keys;
@@ -166,7 +189,9 @@ class HostLink extends ChangeNotifier {
         if (env.sid == sid) await _pc?.setRemoteDescription(RTCSessionDescription(p['sdp'] as String, 'answer'));
       case 'webrtc.ice':
         if (env.sid == sid && (p['candidate'] as String?)?.isNotEmpty == true) {
-          await _pc?.addCandidate(RTCIceCandidate(p['candidate'], p['sdpMid'], p['sdpMLineIndex']));
+          // Never pass null to the native layer (NSNull crashes on iOS).
+          final mid = p['sdpMid'], idx = p['sdpMLineIndex'];
+          await _pc?.addCandidate(RTCIceCandidate(p['candidate'] as String, mid is String ? mid : '0', idx is num ? idx.toInt() : 0));
         }
       case 'session.close':
         if (env.sid == sid) {
@@ -296,8 +321,9 @@ class HostLink extends ChangeNotifier {
   Future<void> _startPeer(List<Map<String, dynamic>> iceServers) async {
     await _teardownPeer();
     _set(LinkState.negotiating);
+    final clean = sanitizeIceServers(iceServers);
     final pc = await createPeerConnection({
-      'iceServers': iceServers.isEmpty ? [{'urls': 'stun:stun.l.google.com:19302'}] : iceServers,
+      'iceServers': clean.isEmpty ? [{'urls': ['stun:stun.l.google.com:19302']}] : clean,
       'sdpSemantics': 'unified-plan',
       'bundlePolicy': 'max-bundle',
     });

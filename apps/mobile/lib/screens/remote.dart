@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:ui' show ImageFilter;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -9,7 +11,9 @@ import '../app_state.dart';
 import '../core/host_link.dart';
 import '../core/storage.dart';
 import '../l10n.dart';
+import '../ui/adaptive.dart';
 import '../ui/glass.dart';
+import '../ui/platform_ui.dart';
 import '../ui/theme.dart';
 import 'chat.dart';
 import 'home.dart';
@@ -260,7 +264,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
 
   // ---------- actions ----------
 
-  void _toast(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), duration: const Duration(seconds: 2)));
+  void _toast(String m) => showToast(context, m);
 
   Future<void> _action(String id) async {
     switch (id) {
@@ -278,7 +282,12 @@ class _RemoteScreenState extends State<RemoteScreen> {
         try {
           final r = await link.call('screen.capture', {'display': link.currentDisplay});
           if (!mounted) return;
-          showDialog(context: context, builder: (_) => Dialog(child: InteractiveViewer(child: Image.memory(base64Decode(r['png'])))));
+          await showPanel(context, title: tr('screenshot'), children: (c) => [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ClipRRect(borderRadius: BorderRadius.circular(12), child: InteractiveViewer(child: Image.memory(base64Decode(r['png'])))),
+                ),
+              ]);
         } on RpcError catch (e) {
           _toast(e.message);
         }
@@ -287,60 +296,66 @@ class _RemoteScreenState extends State<RemoteScreen> {
       case 'cursor':
         setState(() => _showCursor = !_showCursor);
       case 'ai':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(host: widget.host)));
+        pushRoot(context, ChatScreen(host: widget.host));
       case 'clipboard':
         _clipboard();
       case 'stats':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => DiagnosticsScreen(link: link)));
+        pushRoot(context, DiagnosticsScreen(link: link));
       case 'disconnect':
         await link.disconnect();
-        if (mounted) Navigator.pop(context);
+        if (mounted) Navigator.of(context).pop();
     }
   }
 
   Future<void> _pickDisplay() async {
     final d = link.displays;
-    final i = await showModalBottomSheet<int>(context: context, showDragHandle: true, builder: (c) => ListView(shrinkWrap: true, children: [
-          for (final m in d)
-            ListTile(
-              leading: Icon(m['primary'] == true ? Icons.desktop_windows : Icons.monitor),
-              title: Text('${tr('display')} ${m['index'] + 1}'),
-              subtitle: Text('${m['w']}×${m['h']}'),
-              trailing: m['index'] == link.currentDisplay ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.pop(c, m['index'] as int),
-            ),
-        ]));
+    final v = await showActions(context, title: tr('display'), actions: [
+      for (final m in d)
+        DialogAction('${m['index']}', '${tr('display')} ${m['index'] + 1} · ${m['w']}×${m['h']}${m['index'] == link.currentDisplay ? '  ✓' : ''}'),
+      DialogAction('cancel', tr('cancel'), cancel: true),
+    ]);
+    final i = int.tryParse(v ?? '');
     if (i == null) return;
     try {
       await link.call('display.select', {'index': i});
       link.currentDisplay = i;
-      setState(() { _zoom = 1; _pan = Offset.zero; });
+      setState(() {
+        _zoom = 1;
+        _pan = Offset.zero;
+      });
     } on RpcError catch (e) {
       _toast(e.message);
     }
   }
 
   Future<void> _pickQuality() async {
-    const presets = ['Auto', 'DataSaver', 'Balanced', 'HighQuality', 'LowLatency'];
-    final p = await showModalBottomSheet<String>(context: context, showDragHandle: true, builder: (c) => ListView(shrinkWrap: true, children: [
-          for (final p in presets) ListTile(title: Text(p), onTap: () => Navigator.pop(c, p)),
-          ListTile(title: const Text('Custom: 1080p · 60 fps · 12 Mbps'), onTap: () => Navigator.pop(c, 'Custom')),
-        ]));
+    final p = await showActions(context, title: tr('quality'), actions: const [
+      DialogAction('Auto', 'Auto'),
+      DialogAction('DataSaver', 'Data saver'),
+      DialogAction('Balanced', 'Balanced'),
+      DialogAction('HighQuality', 'High quality'),
+      DialogAction('LowLatency', 'Low latency'),
+      DialogAction('Custom', '1080p · 60 fps · 12 Mbps'),
+      DialogAction('cancel', 'Cancel', cancel: true),
+    ]);
     if (p == null) return;
-    await link.call('stream.set', {'preset': p, if (p == 'Custom') ...{'maxWidth': 1920, 'maxHeight': 1080, 'fps': 60, 'targetKbps': 8000, 'maxKbps': 12000}})
+    await link
+        .call('stream.set', {'preset': p, if (p == 'Custom') ...{'maxWidth': 1920, 'maxHeight': 1080, 'fps': 60, 'targetKbps': 8000, 'maxKbps': 12000}})
         .catchError((Object e) => <String, dynamic>{});
   }
 
   Future<void> _clipboard() async {
     if (!widget.host.can('clipboard')) return _toast(tr('not_allowed'));
-    final choice = await showModalBottomSheet<String>(context: context, showDragHandle: true, builder: (c) => Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(leading: const Icon(Icons.upload), title: Text(tr('send_clipboard')), onTap: () => Navigator.pop(c, 'send')),
-          ListTile(leading: const Icon(Icons.download), title: Text(tr('get_clipboard')), onTap: () => Navigator.pop(c, 'get')),
-        ]));
+    final choice = await showActions(context, title: tr('clipboard'), actions: [
+      DialogAction('send', tr('send_clipboard')),
+      DialogAction('get', tr('get_clipboard')),
+      DialogAction('cancel', tr('cancel'), cancel: true),
+    ]);
     try {
       if (choice == 'send') {
         final data = await Clipboard.getData('text/plain');
         if (data?.text != null) await link.call('clipboard.set', {'text': data!.text});
+        _toast('✓');
       } else if (choice == 'get') {
         final r = await link.call('clipboard.get');
         if (r['text'] != null) await Clipboard.setData(ClipboardData(text: r['text']));
@@ -351,9 +366,98 @@ class _RemoteScreenState extends State<RemoteScreen> {
     }
   }
 
+  List<_ToolItem> get _tools => [
+        _ToolItem('keyboard', Icons.keyboard, CupertinoIcons.keyboard, 'keyboard', tr('keyboard'), active: _keyboard),
+        _ToolItem('mode', _trackpad ? Icons.touch_app : Icons.pan_tool_alt, _trackpad ? CupertinoIcons.hand_point_left : CupertinoIcons.hand_draw,
+            _trackpad ? 'hand.point.up.left' : 'hand.tap', _trackpad ? tr('trackpad') : tr('touch')),
+        _ToolItem('display', Icons.monitor, CupertinoIcons.tv, 'display.2', tr('display')),
+        _ToolItem('screenshot', Icons.photo_camera, CupertinoIcons.camera, 'camera', tr('screenshot')),
+        _ToolItem('quality', Icons.hd, CupertinoIcons.slider_horizontal_3, 'dial.medium', tr('quality')),
+        _ToolItem('cursor', Icons.mouse, CupertinoIcons.cursor_rays, 'cursorarrow', tr('cursor'), active: _showCursor),
+        _ToolItem('clipboard', Icons.content_paste, CupertinoIcons.doc_on_clipboard, 'doc.on.clipboard', tr('clipboard')),
+        _ToolItem('ai', Icons.auto_awesome, CupertinoIcons.sparkles, 'sparkles', 'AI'),
+        _ToolItem('stats', Icons.speed, CupertinoIcons.speedometer, 'speedometer', tr('diagnostics')),
+        _ToolItem('disconnect', Icons.close, CupertinoIcons.xmark, 'xmark', tr('disconnect'), destructive: true),
+      ];
+
+  Widget _buildToolbar(BuildContext context) {
+    final tools = _tools;
+    switch (PlatformUi.style) {
+      case UiStyle.glass:
+        return GlassToolbar(
+          onAction: _action,
+          actions: [for (final t in tools) GlassAction(t.id, t.sf, t.label, active: t.active, destructive: t.destructive)],
+        );
+      case UiStyle.cupertino:
+        // iOS 18: dark HUD-style bar (system thick material look), Cupertino icons.
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              height: 58,
+              color: const Color(0xB31C1C1E),
+              child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 6), children: [
+                for (final t in tools)
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 11),
+                    onPressed: () => _action(t.id),
+                    child: Icon(t.cupertino, size: 24, semanticLabel: t.label,
+                        color: t.destructive ? CupertinoColors.systemRed : (t.active ? CupertinoColors.activeBlue : CupertinoColors.white)),
+                  ),
+              ]),
+            ),
+          ),
+        );
+      case UiStyle.material:
+        final s = Theme.of(context).colorScheme;
+        return Material(
+          color: s.surfaceContainerHigh,
+          elevation: 6,
+          shape: const StadiumBorder(),
+          child: SizedBox(
+            height: 60,
+            child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 8), children: [
+              for (final t in tools)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                  child: t.active
+                      ? IconButton.filledTonal(tooltip: t.label, onPressed: () => _action(t.id), icon: Icon(t.material))
+                      : IconButton(tooltip: t.label, onPressed: () => _action(t.id), icon: Icon(t.material, color: t.destructive ? s.error : null)),
+                ),
+            ]),
+          ),
+        );
+    }
+  }
+
+  Widget _statusCard(BuildContext context) {
+    final p = Palette.of(context);
+    final ios = PlatformUi.isIOS;
+    return Center(
+      child: Container(
+        width: 300,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: ios ? CupertinoColors.secondarySystemGroupedBackground.resolveFrom(context) : Theme.of(context).colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(PlatformUi.isGlass ? 28 : (ios ? 14 : 28)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (link.state != LinkState.failed) const Spinner(size: 28) else Icon(Ic.wifiOff.data, color: p.danger, size: 36),
+          const SizedBox(height: 12),
+          Text(stateLabel(link.state), style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.label)),
+          if (link.error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(link.error!, textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: p.secondary))),
+          const SizedBox(height: 16),
+          PrimaryButton(id: 'remote-retry', label: tr('retry_now'), icon: Ic.refresh, onPressed: link.retryNow),
+          const SizedBox(height: 8),
+          LinkButton(label: tr('cancel'), onPressed: () => Navigator.of(context).pop()),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context);
     return Scaffold(
       backgroundColor: Colors.black,
       body: Focus(
@@ -391,7 +495,9 @@ class _RemoteScreenState extends State<RemoteScreen> {
                   onScaleEnd: _onScaleEnd,
                   child: ClipRect(
                     child: Transform(
-                      transform: Matrix4.identity()..translateByDouble(_pan.dx, _pan.dy, 0, 1)..scaleByDouble(_zoom, _zoom, 1, 1),
+                      transform: Matrix4.identity()
+                        ..translateByDouble(_pan.dx, _pan.dy, 0, 1)
+                        ..scaleByDouble(_zoom, _zoom, 1, 1),
                       child: _rendererReady ? RTCVideoView(_renderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain) : const SizedBox(),
                     ),
                   ),
@@ -403,57 +509,29 @@ class _RemoteScreenState extends State<RemoteScreen> {
               Positioned(
                 left: _fromRemote(_pointer).dx - 2,
                 top: _fromRemote(_pointer).dy - 2,
-                child: const IgnorePointer(child: Icon(Icons.navigation, size: 22, color: Colors.white, shadows: [Shadow(blurRadius: 4)])),
+                child: IgnorePointer(child: Icon(PlatformUi.isIOS ? CupertinoIcons.location_north_fill : Icons.navigation, size: 22, color: Colors.white, shadows: const [Shadow(blurRadius: 4)])),
               ),
             // ---------------- status overlay ----------------
-            if (!link.isConnected)
-              Center(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      if (link.state != LinkState.failed) const CircularProgressIndicator() else Icon(Icons.wifi_off, color: t.colorScheme.error, size: 36),
-                      const SizedBox(height: 12),
-                      Text(stateLabel(link.state), style: t.textTheme.titleMedium),
-                      if (link.error != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(link.error!, textAlign: TextAlign.center)),
-                      const SizedBox(height: 12),
-                      Row(mainAxisSize: MainAxisSize.min, children: [
-                        TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
-                        FilledButton(onPressed: link.retryNow, child: Text(tr('retry_now'))),
-                      ]),
-                    ]),
-                  ),
-                ),
-              ),
+            if (!link.isConnected) _statusCard(context),
             // ---------------- toolbar ----------------
             Positioned(
-              left: 12, right: 12, bottom: 12 + MediaQuery.of(context).viewInsets.bottom,
+              left: 12, right: 12, bottom: 12 + MediaQuery.viewInsetsOf(context).bottom,
               child: SafeArea(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  if (_keyboard) _KeyRow(modifiers: _modifiers, onKey: (k) => _key(_vk[k] ?? int.parse(k)), onModifier: (k) => _toggleModifier(_vk[k]!), onCombo: (vks) => link.sendInput({'k': 'combo', 'vks': vks})),
+                  if (_keyboard)
+                    _KeyRow(modifiers: _modifiers, onKey: (k) => _key(_vk[k] ?? int.parse(k)), onModifier: (k) => _toggleModifier(_vk[k]!), onCombo: (vks) => link.sendInput({'k': 'combo', 'vks': vks})),
                   AnimatedSlide(
                     duration: Motion.medium,
                     curve: Motion.standard,
                     offset: _toolbar ? Offset.zero : const Offset(0, 1.6),
-                    child: GlassToolbar(onAction: _action, actions: [
-                      GlassAction('keyboard', Icons.keyboard, 'keyboard', tr('keyboard'), active: _keyboard),
-                      GlassAction('mode', _trackpad ? Icons.touch_app : Icons.pan_tool_alt, _trackpad ? 'hand.point.up.left' : 'hand.tap', _trackpad ? tr('trackpad') : tr('touch')),
-                      GlassAction('display', Icons.monitor, 'display.2', tr('display')),
-                      GlassAction('screenshot', Icons.photo_camera, 'camera', tr('screenshot')),
-                      GlassAction('quality', Icons.hd, 'dial.medium', tr('quality')),
-                      GlassAction('cursor', Icons.mouse, 'cursorarrow', 'Cursor', active: _showCursor),
-                      GlassAction('clipboard', Icons.content_paste, 'doc.on.clipboard', tr('clipboard')),
-                      GlassAction('ai', Icons.auto_awesome, 'sparkles', 'AI'),
-                      GlassAction('stats', Icons.speed, 'speedometer', tr('diagnostics')),
-                      GlassAction('disconnect', Icons.close, 'xmark', tr('disconnect')),
-                    ]),
+                    child: _buildToolbar(context),
                   ),
                 ]),
               ),
             ),
-            // toolbar handle
+            // stats + toolbar handle
             Positioned(
-              right: 8, top: MediaQuery.of(context).padding.top + 8,
+              right: 8, top: MediaQuery.paddingOf(context).top + 8,
               child: Row(children: [
                 if (link.isConnected)
                   Container(
@@ -462,23 +540,54 @@ class _RemoteScreenState extends State<RemoteScreen> {
                     child: Text('${link.stats.fps.toStringAsFixed(0)} fps · ${link.stats.rttMs.toStringAsFixed(0)} ms · ${link.stats.path}',
                         style: const TextStyle(color: Colors.white70, fontSize: 11)),
                   ),
-                IconButton.filledTonal(
-                  icon: Icon(_toolbar ? Icons.expand_more : Icons.expand_less),
-                  onPressed: () => setState(() => _toolbar = !_toolbar),
-                ),
+                const SizedBox(width: 6),
+                if (PlatformUi.isGlass)
+                  GlassBar(
+                    actions: [GlassAction('toggle', _toolbar ? 'chevron.down' : 'chevron.up', 'Toolbar')],
+                    onAction: (_) => setState(() => _toolbar = !_toolbar),
+                  )
+                else if (PlatformUi.isIOS)
+                  CupertinoButton(
+                    padding: const EdgeInsets.all(8),
+                    color: const Color(0xB31C1C1E),
+                    borderRadius: BorderRadius.circular(20),
+                    minimumSize: const Size(40, 40),
+                    onPressed: () => setState(() => _toolbar = !_toolbar),
+                    child: Icon(_toolbar ? CupertinoIcons.chevron_down : CupertinoIcons.chevron_up, color: CupertinoColors.white, size: 18),
+                  )
+                else
+                  IconButton.filledTonal(icon: Icon(_toolbar ? Icons.expand_more : Icons.expand_less), onPressed: () => setState(() => _toolbar = !_toolbar)),
               ]),
             ),
             // hidden text input for the soft keyboard
             Positioned(
               left: -1000, top: 0, width: 10, height: 10,
-              child: TextField(controller: _textCtl, focusNode: _textFocus, onChanged: _onTextChanged, autocorrect: false, enableSuggestions: false,
-                  keyboardType: TextInputType.text, onSubmitted: (_) { _key(0x0D); _textFocus.requestFocus(); }),
+              child: TextField(
+                controller: _textCtl,
+                focusNode: _textFocus,
+                onChanged: _onTextChanged,
+                autocorrect: false,
+                enableSuggestions: false,
+                keyboardType: TextInputType.text,
+                onSubmitted: (_) {
+                  _key(0x0D);
+                  _textFocus.requestFocus();
+                },
+              ),
             ),
           ]),
         ),
       ),
     );
   }
+}
+
+class _ToolItem {
+  final String id;
+  final IconData material, cupertino;
+  final String sf, label;
+  final bool active, destructive;
+  const _ToolItem(this.id, this.material, this.cupertino, this.sf, this.label, {this.active = false, this.destructive = false});
 }
 
 class _KeyRow extends StatelessWidget {

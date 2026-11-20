@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 /// Shared animation tokens (also mirrored on Windows). Reduce Motion collapses durations to zero.
@@ -9,88 +9,65 @@ class Motion {
   static Duration get slow => reduced ? Duration.zero : const Duration(milliseconds: 380);
   static const Curve standard = Curves.easeOutCubic;
   static const Curve emphasized = Curves.easeOutBack;
-  static const SpringDescription spring = SpringDescription(mass: 1, stiffness: 420, damping: 32);
-  static const double pressScale = 0.96;
 }
 
 class Brand {
   static const seed = Color(0xFF4F46E5);
   static const accent2 = Color(0xFF06B6D4);
   static const gradient = LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF06B6D4)], begin: Alignment.topLeft, end: Alignment.bottomRight);
-  static const radius = 18.0;
 }
 
-ThemeData buildTheme(Brightness b) {
-  final scheme = ColorScheme.fromSeed(seedColor: Brand.seed, brightness: b);
+/// Android: Material 3 (expressive shapes, tonal surfaces, predictive back).
+ThemeData buildMaterialTheme(Brightness b) {
+  final scheme = ColorScheme.fromSeed(seedColor: Brand.seed, brightness: b, dynamicSchemeVariant: DynamicSchemeVariant.tonalSpot);
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor: b == Brightness.dark ? const Color(0xFF0F1117) : const Color(0xFFF4F6FB),
+    scaffoldBackgroundColor: scheme.surface,
+    appBarTheme: AppBarTheme(backgroundColor: scheme.surface, surfaceTintColor: Colors.transparent, scrolledUnderElevation: 2),
     cardTheme: CardThemeData(
       elevation: 0,
-      color: b == Brightness.dark ? const Color(0xFF1A1E2C) : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Brand.radius)),
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
     ),
-    pageTransitionsTheme: const PageTransitionsTheme(builders: {
-      TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
-      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-    }),
+    listTileTheme: const ListTileThemeData(contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 2)),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: scheme.surfaceContainer,
+      indicatorColor: scheme.secondaryContainer,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      height: 72,
+    ),
+    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(shape: const StadiumBorder(), padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14))),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {TargetPlatform.android: PredictiveBackPageTransitionsBuilder()}),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      fillColor: scheme.surfaceContainerHighest,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(28), borderSide: BorderSide.none),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
     ),
+    snackBarTheme: SnackBarThemeData(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
   );
 }
 
-/// Button wrapper with the shared press-scale animation.
-class Pressable extends StatefulWidget {
-  final Widget child;
-  final VoidCallback? onTap;
-  const Pressable({super.key, required this.child, this.onTap});
-  @override
-  State<Pressable> createState() => _PressableState();
+/// iOS: Material widgets that remain (Markdown, selection, ink) take iOS system colours; the visible chrome is Cupertino.
+ThemeData buildIosSupportTheme(Brightness b) {
+  final dark = b == Brightness.dark;
+  final scheme = ColorScheme.fromSeed(seedColor: Brand.seed, brightness: b).copyWith(
+    primary: Brand.seed,
+    surface: dark ? const Color(0xFF000000) : const Color(0xFFF2F2F7),
+    surfaceContainerHighest: dark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
+    error: dark ? const Color(0xFFFF453A) : const Color(0xFFFF3B30),
+  );
+  return ThemeData(
+    useMaterial3: true,
+    platform: TargetPlatform.iOS,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: scheme.surface,
+    splashFactory: NoSplash.splashFactory,
+    cupertinoOverrideTheme: buildCupertinoTheme(b),
+  );
 }
 
-class _PressableState extends State<Pressable> {
-  bool _down = false;
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTapDown: (_) => setState(() => _down = true),
-        onTapCancel: () => setState(() => _down = false),
-        onTapUp: (_) => setState(() => _down = false),
-        onTap: widget.onTap,
-        child: AnimatedScale(scale: _down ? Motion.pressScale : 1, duration: Motion.fast, curve: Motion.standard, child: widget.child),
-      );
-}
-
-/// Empty / error state used across screens.
-class EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final Widget? action;
-  const EmptyState({super.key, required this.icon, required this.title, this.subtitle, this.action});
-  @override
-  Widget build(BuildContext context) {
-    final t = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: 1),
-          duration: Motion.slow,
-          curve: Motion.standard,
-          builder: (_, v, child) => Opacity(opacity: v, child: Transform.translate(offset: Offset(0, 12 * (1 - v)), child: child)),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 56, color: t.colorScheme.primary),
-            const SizedBox(height: 16),
-            Text(title, style: t.textTheme.titleMedium, textAlign: TextAlign.center),
-            if (subtitle != null) ...[const SizedBox(height: 8), Text(subtitle!, style: t.textTheme.bodySmall, textAlign: TextAlign.center)],
-            if (action != null) ...[const SizedBox(height: 20), action!],
-          ]),
-        ),
-      ),
-    );
-  }
-}
+CupertinoThemeData buildCupertinoTheme(Brightness b) => CupertinoThemeData(brightness: b, primaryColor: Brand.seed, applyThemeToAll: true);

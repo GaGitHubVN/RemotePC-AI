@@ -156,7 +156,9 @@ public sealed class SessionManager
             ["sid"] = sid,
             ["token"] = token,
             ["permissions"] = new JsonArray(PermissionNames.ToNames(device.Permissions).Select(n => (JsonNode)n).ToArray()),
-            ["iceServers"] = JsonSerializer.SerializeToNode(ice.Select(s => new { urls = s.urls.Split(','), s.username, s.credential })),
+            // Never emit null username/credential: native WebRTC clients (flutter_webrtc on iOS) turn JSON null into
+            // NSNull and crash when building RTCIceServer. STUN entries carry urls only.
+            ["iceServers"] = new JsonArray(ice.Select(IceJson).ToArray()),
             ["displays"] = displays,
             ["hostName"] = Environment.MachineName,
         });
@@ -169,6 +171,14 @@ public sealed class SessionManager
     {
         await Task.Delay(TimeSpan.FromSeconds(45)).ConfigureAwait(false);
         if (s.State == SessionState.Negotiating) await CloseSessionAsync(s, "connect_timeout").ConfigureAwait(false);
+    }
+
+    internal static JsonNode IceJson(RTCIceServer s)
+    {
+        var o = new JsonObject { ["urls"] = new JsonArray(s.urls.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(u => (JsonNode)u).ToArray()) };
+        if (!string.IsNullOrEmpty(s.username)) o["username"] = s.username;
+        if (!string.IsNullOrEmpty(s.credential)) o["credential"] = s.credential;
+        return o;
     }
 
     private static List<RTCIceServer> DefaultIce() => [new RTCIceServer { urls = "stun:stun.l.google.com:19302" }];

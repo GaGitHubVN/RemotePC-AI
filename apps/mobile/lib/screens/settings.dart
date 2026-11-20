@@ -2,7 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../l10n.dart';
+import '../ui/adaptive.dart';
+import '../ui/platform_ui.dart';
 import 'home.dart';
+
+String uiStyleLabel() => switch (PlatformUi.style) {
+      UiStyle.glass => '${tr('ui_glass')} · iOS ${PlatformUi.osMajor}',
+      UiStyle.cupertino => '${tr('ui_ios')} ${PlatformUi.osMajor}',
+      UiStyle.material => '${tr('ui_material')} · Android',
+    };
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -10,46 +18,89 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppState.instance;
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('settings'))),
-      body: ListenableBuilder(
-        listenable: s,
-        builder: (context, _) => ListView(children: [
-          ListTile(
-            leading: const Icon(Icons.language),
-            title: Text(tr('language')),
-            trailing: SegmentedButton<String>(
-              segments: const [ButtonSegment(value: 'vi', label: Text('VI')), ButtonSegment(value: 'en', label: Text('EN'))],
-              selected: {s.language},
-              onSelectionChanged: (v) { s.language = v.first; s.savePrefs(); },
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.dark_mode_outlined),
-            title: Text(tr('theme')),
-            trailing: DropdownButton<String>(
-              value: s.themeMode,
-              items: const [DropdownMenuItem(value: 'system', child: Text('System')), DropdownMenuItem(value: 'light', child: Text('Light')), DropdownMenuItem(value: 'dark', child: Text('Dark'))],
-              onChanged: (v) { s.themeMode = v!; s.savePrefs(); },
-            ),
-          ),
-          SwitchListTile(secondary: const Icon(Icons.animation), title: Text(tr('reduce_motion')), value: s.reduceMotion, onChanged: (v) { s.reduceMotion = v; s.savePrefs(); }),
-          SwitchListTile(secondary: const Icon(Icons.touch_app_outlined), title: Text(tr('trackpad')), value: s.trackpadMode, onChanged: (v) { s.trackpadMode = v; s.savePrefs(); }),
-          ListTile(
-            leading: const Icon(Icons.speed),
-            title: Text(tr('sensitivity')),
-            subtitle: Slider(min: 0.5, max: 3, divisions: 10, value: s.pointerSensitivity, label: s.pointerSensitivity.toStringAsFixed(1),
-                onChanged: (v) { s.pointerSensitivity = v; s.savePrefs(); }),
-          ),
-          const Divider(),
-          ListTile(leading: const Icon(Icons.shield_outlined), title: Text(tr('security')), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SecurityScreen()))),
-          ListTile(leading: const Icon(Icons.info_outline), title: Text(tr('about')), onTap: () => showAboutDialog(
-                context: context,
-                applicationName: 'RemotePC AI',
-                applicationVersion: '0.1.0',
-                children: const [Text('Remote desktop and local AI for your own Windows PC. End-to-end encrypted; AI runs on your PC.')],
-              )),
-        ]),
+    return ListenableBuilder(
+      listenable: s,
+      builder: (context, _) => AppPage(
+        title: tr('settings'),
+        large: true,
+        slivers: [
+          SliverList.list(children: [
+            Section(header: tr('appearance'), children: [
+              Tile(
+                title: tr('language'),
+                icon: Ic.language,
+                iconColor: const Color(0xFF0A84FF),
+                chevron: false,
+                trailing: Segmented<String>(options: const {'vi': 'VI', 'en': 'EN'}, value: s.language, onChanged: (v) {
+                  s.language = v;
+                  s.savePrefs();
+                }),
+              ),
+              Tile(
+                title: tr('theme'),
+                icon: Ic.theme,
+                iconColor: const Color(0xFF5E5CE6),
+                chevron: false,
+                value: switch (s.themeMode) { 'light' => tr('theme_light'), 'dark' => tr('theme_dark'), _ => tr('theme_system') },
+                onTap: () async {
+                  final v = await showActions(context, title: tr('theme'), actions: [
+                    DialogAction('system', tr('theme_system')),
+                    DialogAction('light', tr('theme_light')),
+                    DialogAction('dark', tr('theme_dark')),
+                    DialogAction('cancel', tr('cancel'), cancel: true),
+                  ]);
+                  if (v == null) return;
+                  s.themeMode = v;
+                  await s.savePrefs();
+                  await PlatformUi.setThemeMode(v);
+                },
+              ),
+              Tile(
+                title: tr('reduce_motion'),
+                icon: Ic.motion,
+                iconColor: const Color(0xFF30B0C7),
+                chevron: false,
+                trailing: AdaptiveSwitch(value: s.reduceMotion, onChanged: (v) {
+                  s.reduceMotion = v;
+                  s.savePrefs();
+                }),
+              ),
+            ]),
+            Section(header: tr('control'), children: [
+              Tile(
+                title: tr('trackpad'),
+                icon: Ic.touch,
+                iconColor: const Color(0xFFFF9F0A),
+                chevron: false,
+                trailing: AdaptiveSwitch(value: s.trackpadMode, onChanged: (v) {
+                  s.trackpadMode = v;
+                  s.savePrefs();
+                }),
+              ),
+              Tile(
+                title: tr('sensitivity'),
+                icon: Ic.pointer,
+                iconColor: const Color(0xFFFF375F),
+                chevron: false,
+                value: s.pointerSensitivity.toStringAsFixed(1),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: AdaptiveSlider(min: 0.5, max: 3, divisions: 10, value: s.pointerSensitivity, onChanged: (v) {
+                  s.pointerSensitivity = v;
+                  s.savePrefs();
+                }),
+              ),
+            ]),
+            Section(children: [
+              Tile(title: tr('security'), icon: Ic.shield, iconColor: const Color(0xFF34C759), onTap: () => pushPage(context, const SecurityScreen())),
+            ]),
+            Section(header: tr('about'), footer: tr('about_text'), children: [
+              Tile(title: tr('version'), value: '0.2.0', chevron: false),
+              Tile(title: tr('ui_style'), value: uiStyleLabel(), chevron: false),
+            ]),
+          ]),
+        ],
       ),
     );
   }
@@ -60,37 +111,30 @@ class SecurityScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppState.instance;
-    return Scaffold(
-      appBar: AppBar(title: Text(tr('security'))),
-      body: ListView(children: [
-        ListTile(title: const Text('This phone\'s device ID'), subtitle: SelectableText(s.keys.deviceId)),
-        const ListTile(
-          title: Text('How your connection is protected'),
-          subtitle: Text('Keys are stored in the Keychain / Android Keystore. Signaling messages are end-to-end encrypted (X25519 + AES-256-GCM); '
-              'video and data use WebRTC DTLS-SRTP. The PC checks permissions for every request.'),
-        ),
-        const Divider(),
-        for (final h in s.hosts)
-          ListTile(
-            leading: const Icon(Icons.computer),
-            title: Text(h.name),
-            subtitle: Text(h.permissions.join(', ')),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HostDetailsScreen(host: h))),
+    return AppPage(title: tr('security'), slivers: [
+      SliverList.list(children: [
+        Section(header: tr('this_phone'), footer: tr('protection_text'), children: [
+          Tile(title: tr('device_id'), subtitle: s.keys.deviceId, chevron: false),
+        ]),
+        Section(header: tr('paired_pcs'), children: [
+          for (final h in s.hosts)
+            Tile(title: h.name, subtitle: h.permissions.join(', '), icon: Ic.pc, onTap: () => pushPage(context, HostDetailsScreen(host: h))),
+        ]),
+        Section(children: [
+          Tile(
+            title: tr('reset_identity'),
+            icon: Ic.refresh,
+            destructive: true,
+            onTap: () async {
+              final r = await showAlert(context, title: tr('reset_identity'), message: tr('reset_confirm'), actions: [
+                DialogAction('cancel', tr('cancel'), cancel: true),
+                DialogAction('reset', tr('reset_identity'), destructive: true),
+              ]);
+              if (r == 'reset') await s.resetIdentity();
+            },
           ),
-        const Divider(),
-        ListTile(
-          leading: Icon(Icons.restart_alt, color: Theme.of(context).colorScheme.error),
-          title: Text(tr('reset_identity'), style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          subtitle: const Text('Deletes this phone\'s keys and all paired PCs. You will need to pair again.'),
-          onTap: () async {
-            final ok = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
-                  title: Text(tr('reset_identity')),
-                  actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: Text(tr('cancel'))), FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('OK'))],
-                ));
-            if (ok == true) await s.resetIdentity();
-          },
-        ),
+        ]),
       ]),
-    );
+    ]);
   }
 }
