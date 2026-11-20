@@ -60,8 +60,8 @@ public sealed class SignalingClient : IAsyncDisposable
         var tcs = new TaskCompletionSource<JsonObject>(TaskCreationOptions.RunContinuationsAsynchronously);
         _turnWaiter = tcs;
         _outbox.Writer.TryWrite("{\"t\":\"turn\"}");
-        var done = await Task.WhenAny(tcs.Task, Task.Delay(timeout)).ConfigureAwait(false);
-        return done == tcs.Task ? tcs.Task.Result : null;
+        try { return await tcs.Task.WaitAsync(timeout).ConfigureAwait(false); }
+        catch (TimeoutException) { return null; }
     }
 
     private void SetState(SignalingState s)
@@ -92,7 +92,9 @@ public sealed class SignalingClient : IAsyncDisposable
             SetState(SignalingState.Backoff);
             var delay = Backoff(attempt++);
             _retryNow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            await Task.WhenAny(Task.Delay(delay, ct), _retryNow.Task).ConfigureAwait(false);
+            try { await _retryNow.Task.WaitAsync(delay, ct).ConfigureAwait(false); }
+            catch (TimeoutException) { }
+            catch (OperationCanceledException) { }
         }
         SetState(SignalingState.Disconnected);
     }
