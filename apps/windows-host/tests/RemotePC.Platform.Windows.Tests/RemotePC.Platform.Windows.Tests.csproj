@@ -13,4 +13,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\RemotePC.Platform.Windows\RemotePC.Platform.Windows.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\RemotePC.Core.Tests\TestPhone.cs" Link="Shared\TestPhone.cs" />
+    <Compile Include="..\RemotePC.Core.Tests\TestSupport.cs" Link="Shared\TestSupport.cs" />
+    <Content Include="..\..\..\..\packages\protocol\vectors\v1.json" Link="vectors\v1.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
