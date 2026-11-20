@@ -50,11 +50,15 @@ void main() {
   Future<void> shot(WidgetTester t, String name) async {
     await settle(t, 1200);
     // The test host takes the native simulator screenshot synchronously (xcrun simctl io … screenshot).
-    final c = HttpClient();
+    final c = HttpClient()..connectionTimeout = const Duration(seconds: 10);
     try {
-      final r = await (await c.getUrl(Uri.parse('${pairHttp}shot/$name'))).close();
+      // A screenshot is evidence, not part of the flow under test: never let it hang or fail the test.
+      final r = await (await c.getUrl(Uri.parse('${pairHttp}shot/$name'))).close().timeout(const Duration(seconds: 45));
       // ignore: avoid_print
-      print('SHOT:$name → ${await r.transform(const SystemEncoding().decoder).join()}');
+      print('SHOT:$name → ${await r.transform(const SystemEncoding().decoder).join().timeout(const Duration(seconds: 10))}');
+    } catch (e) {
+      // ignore: avoid_print
+      print('SHOT:$name failed: $e');
     } finally {
       c.close();
     }

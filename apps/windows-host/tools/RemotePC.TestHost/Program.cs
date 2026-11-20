@@ -91,12 +91,16 @@ _ = Task.Run(async () =>
     while (http2.IsListening)
     {
         var ctx = await http2.GetContextAsync();
+        try
+        {
         var path = ctx.Request.Url?.AbsolutePath ?? "/";
         if (path.StartsWith("/shot/", StringComparison.Ordinal) && shotDir is not null)
         {
             // Synchronous native screenshot of every booted simulator (macOS CI only).
             var name = new string(path[6..].Where(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_').ToArray());
-            var report = await ShotAsync(shotDir, name);
+            string report;
+            try { report = await ShotAsync(shotDir, name).WaitAsync(TimeSpan.FromSeconds(30)); }
+            catch (Exception ex) { report = $"screenshot failed: {ex.GetType().Name}: {ex.Message}"; }
             Log($"shot {name}: {report}");
             var rb = System.Text.Encoding.UTF8.GetBytes(report);
             await ctx.Response.OutputStream.WriteAsync(rb);
@@ -109,6 +113,13 @@ _ = Task.Run(async () =>
         ctx.Response.ContentType = "text/plain";
         await ctx.Response.OutputStream.WriteAsync(body);
         ctx.Response.Close();
+        }
+        catch (Exception ex)
+        {
+            // Never leave the phone's request hanging (and never let one failure stop the listener loop).
+            Log($"http {ctx.Request.Url?.AbsolutePath} failed: {ex.GetType().Name}: {ex.Message}");
+            try { ctx.Response.StatusCode = 500; ctx.Response.Close(); } catch (Exception) { /* client gone */ }
+        }
     }
 });
 
@@ -159,7 +170,12 @@ static async Task<string> ShotAsync(string dir, string name)
     {
         // Android emulator (Linux CI): adb screencap.
         var file = Path.Combine(dir, $"{name}-android.png");
-        using var p = Process.Start(new ProcessStartInfo("adb", "exec-out screencap -p") { RedirectStandardOutput = true })!;
+        // The test host starts before the emulator runner puts platform-tools on PATH; prefer the SDK copy.
+        var sdk = Environment.GetEnvironmentVariable("ANDROID_HOME") ?? Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
+        var adbExe = sdk is not null && File.Exists(Path.Combine(sdk, "platform-tools", OperatingSystem.IsWindows() ? "adb.exe" : "adb"))
+            ? Path.Combine(sdk, "platform-tools", OperatingSystem.IsWindows() ? "adb.exe" : "adb")
+            : "adb";
+        using var p = Process.Start(new ProcessStartInfo(adbExe, "exec-out screencap -p") { RedirectStandardOutput = true })!;
         await using (var fs = File.Create(file)) await p.StandardOutput.BaseStream.CopyToAsync(fs);
         await p.WaitForExitAsync();
         return $"android {new FileInfo(file).Length} bytes";
