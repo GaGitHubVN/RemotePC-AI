@@ -16,6 +16,7 @@ using RemotePC.Core.Signaling;
 
 var port = args.Length > 0 && int.TryParse(args[0], out var p0) ? p0 : 45900;
 var uriFile = args.Length > 1 ? args[1] : null;
+var shotDir = args.Length > 2 ? args[2] : null;
 var data = Path.Combine(Path.GetTempPath(), "remotepc-testhost-" + Environment.ProcessId);
 Directory.CreateDirectory(data);
 var protector = new EphemeralProtector();
@@ -90,6 +91,18 @@ _ = Task.Run(async () =>
     while (http2.IsListening)
     {
         var ctx = await http2.GetContextAsync();
+        var path = ctx.Request.Url?.AbsolutePath ?? "/";
+        if (path.StartsWith("/shot/", StringComparison.Ordinal) && shotDir is not null)
+        {
+            // Synchronous native screenshot of every booted simulator (macOS CI only).
+            var name = new string(path[6..].Where(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_').ToArray());
+            var report = await ShotAsync(shotDir, name);
+            Log($"shot {name}: {report}");
+            var rb = System.Text.Encoding.UTF8.GetBytes(report);
+            await ctx.Response.OutputStream.WriteAsync(rb);
+            ctx.Response.Close();
+            continue;
+        }
         var o = pairing.CreateOffer(PairingMode.Qr);
         var body = System.Text.Encoding.UTF8.GetBytes(pairing.BuildQrUri(o, "CI-TestHost", null, [$"127.0.0.1:{lan.Port}"]));
         Log("issued a fresh pairing offer over HTTP");
@@ -130,6 +143,36 @@ async Task DispatchAsync(Envelope env, EnvelopeSender reply)
 }
 
 static void Log(string m) => Console.WriteLine($"{DateTime.UtcNow:HH:mm:ss.fff} {m}");
+
+static async Task<string> Run(string file, string arguments)
+{
+    using var p = Process.Start(new ProcessStartInfo(file, arguments) { RedirectStandardOutput = true, RedirectStandardError = true })!;
+    var output = await p.StandardOutput.ReadToEndAsync();
+    await p.WaitForExitAsync();
+    return output;
+}
+
+static async Task<string> ShotAsync(string dir, string name)
+{
+    Directory.CreateDirectory(dir);
+    var json = JsonNode.Parse(await Run("xcrun", "simctl list devices booted -j"));
+    var parts = new List<string>();
+    foreach (var (runtime, devs) in json?["devices"]?.AsObject() ?? [])
+    {
+        foreach (var d in devs?.AsArray() ?? [])
+        {
+            var udid = (string?)d?["udid"];
+            if (udid is null) continue;
+            var rt = runtime.Split('.').Last();
+            var apps = await Run("xcrun", $"simctl listapps {udid}");
+            var hasApp = apps.Contains("ai.remotepc.app", StringComparison.Ordinal);
+            var file = Path.Combine(dir, $"{name}-{rt}-{udid[..8]}.png");
+            await Run("xcrun", $"simctl io {udid} screenshot \"{file}\"");
+            parts.Add($"{d?["name"]} {rt} {udid[..8]} app={(hasApp ? "installed" : "absent")}");
+        }
+    }
+    return string.Join("; ", parts);
+}
 
 /// <summary>Process-lifetime key; data is thrown away with the temp folder. CI only.</summary>
 sealed class EphemeralProtector : ISecretProtector

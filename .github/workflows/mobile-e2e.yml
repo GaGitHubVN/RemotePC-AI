@@ -96,7 +96,8 @@ jobs:
       - name: Start RemotePC.TestHost (CI-only, auto-approves pairing)
         run: |
           dotnet build apps/windows-host/tools/RemotePC.TestHost -c Release
-          nohup dotnet apps/windows-host/tools/RemotePC.TestHost/bin/Release/net10.0/RemotePC.TestHost.dll 45900 /tmp/pair.txt > /tmp/testhost.log 2>&1 &
+          mkdir -p "$GITHUB_WORKSPACE/shots"
+          nohup dotnet apps/windows-host/tools/RemotePC.TestHost/bin/Release/net10.0/RemotePC.TestHost.dll 45900 /tmp/pair.txt "$GITHUB_WORKSPACE/shots" > /tmp/testhost.log 2>&1 &
           for i in $(seq 1 60); do [ -s /tmp/pair.txt ] && break; sleep 1; done
           test -s /tmp/pair.txt
           cat /tmp/testhost.log
@@ -117,16 +118,7 @@ jobs:
           xcrun simctl spawn "$UDID" log stream --level debug --style compact --predicate 'process == "Runner"' > /tmp/sim.log 2>&1 &
           set -o pipefail
           flutter test integration_test/app_test.dart -d "$UDID" \
-            --dart-define=PAIR_URI="$URI" --dart-define=PAIR_HTTP=http://127.0.0.1:45901/ --dart-define=EXPECT_STYLE=${{ matrix.style }} --dart-define=NATIVE_TABS=${{ matrix.tabs }} 2>&1 | while IFS= read -r line; do
-            echo "$line"
-            case "$line" in
-              *SHOT:*)
-                n="${line##*SHOT:}"; n="${n%%[^A-Za-z0-9_-]*}"
-                sleep 0.5
-                xcrun simctl io "$UDID" screenshot "$GITHUB_WORKSPACE/shots/${{ matrix.name }}-$n.png" >/dev/null 2>&1 || echo "screenshot failed: $n"
-                ;;
-            esac
-          done
+            --dart-define=PAIR_URI="$URI" --dart-define=PAIR_HTTP=http://127.0.0.1:45901/ --dart-define=EXPECT_STYLE=${{ matrix.style }} --dart-define=NATIVE_TABS=${{ matrix.tabs }} 2>&1
 
       - name: Dark mode screenshot of the home screen
         if: success()

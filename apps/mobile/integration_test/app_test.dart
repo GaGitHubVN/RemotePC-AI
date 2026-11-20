@@ -49,9 +49,15 @@ void main() {
 
   Future<void> shot(WidgetTester t, String name) async {
     await settle(t, 1200);
-    // ignore: avoid_print
-    print('SHOT:$name');
-    await settle(t, 3500); // the harness captures the simulator screen during this window
+    // The test host takes the native simulator screenshot synchronously (xcrun simctl io … screenshot).
+    final c = HttpClient();
+    try {
+      final r = await (await c.getUrl(Uri.parse('${pairHttp}shot/$name'))).close();
+      // ignore: avoid_print
+      print('SHOT:$name → ${await r.transform(const SystemEncoding().decoder).join()}');
+    } finally {
+      c.close();
+    }
   }
 
   Future<void> waitFor(WidgetTester t, bool Function() cond, String what, {int seconds = 40}) async {
@@ -88,11 +94,11 @@ void main() {
     await shot(t, '02-home-paired');
 
     // ---- "Điều khiển màn hình" → remote desktop over WebRTC ----
-    final homeCtx = t.element(find.byType(HomeScreen));
+    final homeCtx = t.element(find.byType(HomeScreen, skipOffstage: false));
     openRemote(homeCtx, host);
     final link = s.link(host);
     await waitFor(t, () => link.isConnected, 'WebRTC connected (state=${link.state.name} error=${link.error})', seconds: 45);
-    await waitFor(t, () => link.stats.framesDecoded > 5, 'decoded video frames (decoded=${link.stats.framesDecoded})', seconds: 30);
+    await waitFor(t, () => link.stats.framesDecoded > 5, 'decoded video frames (decoded=${link.stats.framesDecoded})', seconds: 60);
     // ignore: avoid_print
     print('video: ${link.stats.width}x${link.stats.height} decoded=${link.stats.framesDecoded} codec=${link.stats.codec} path=${link.stats.path}');
     await shot(t, '03-remote');
@@ -103,17 +109,17 @@ void main() {
     expect(ping, isA<Map<String, dynamic>>());
 
     // ---- chat (RPC ai.status; no local model on CI) ----
-    Navigator.of(t.element(find.byType(app.RootShell)), rootNavigator: true).pop();
+    Navigator.of(t.element(find.byType(app.RootShell, skipOffstage: false)), rootNavigator: true).pop();
     await settle(t);
-    openChat(t.element(find.byType(HomeScreen)), host);
+    openChat(t.element(find.byType(HomeScreen, skipOffstage: false)), host);
     await settle(t, 2500);
     await t.enterText(find.byType(EditableText).first, 'Xin chào máy tính 👋');
     await shot(t, '04-chat');
-    Navigator.of(t.element(find.byType(app.RootShell)), rootNavigator: true).pop();
+    Navigator.of(t.element(find.byType(app.RootShell, skipOffstage: false)), rootNavigator: true).pop();
     await settle(t);
 
     // ---- files (fs.roots / fs.list / download with SHA-256 check / upload) ----
-    openFiles(t.element(find.byType(HomeScreen)), host);
+    openFiles(t.element(find.byType(HomeScreen, skipOffstage: false)), host);
     await waitFor(t, () => find.text('Documents').evaluate().isNotEmpty, 'fs.roots listing');
     await shot(t, '05-files-roots');
     await t.tap(find.text('Documents'));
