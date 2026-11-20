@@ -32,6 +32,8 @@ public sealed class SessionManager
     public RpcRegistry Rpc { get; } = new();
     public Func<CancellationToken, Task<List<RTCIceServer>>>? IceServerProvider { get; set; }
     public event Action? Changed;
+    public event Action<HostSession>? SessionCreated;
+    public event Action<HostSession>? SessionClosed;
     public event Action<string, string>? LogMessage;
 
     public SessionManager(PeerRouter router, DeviceStore devices, IScreenSource screen, IInputSink input, TimeProvider time)
@@ -141,6 +143,7 @@ public sealed class SessionManager
         var config = new RTCConfiguration { iceServers = ice, X_UseRtpFeedbackProfile = true };
         var session = new HostSession(this, sid, msg.From, token, config);
         _byDevice[msg.From] = session;
+        SessionCreated?.Invoke(session);
         Log("session", $"opened {sid} for {device.Name}");
 
         var displays = new JsonArray(Screen.Displays().Select(d => (JsonNode)new JsonObject
@@ -180,6 +183,7 @@ public sealed class SessionManager
     {
         if (!_byDevice.TryRemove(new KeyValuePair<string, HostSession>(s.DeviceId, s))) { s.Teardown(); return; }
         s.Teardown();
+        SessionClosed?.Invoke(s);
         if (reason is not ("revoked" or "locked" or "emergency"))
             _resume[s.Id] = new ResumeTicket(s.Id, s.ResumeToken, s.DeviceId, _time.GetUtcNow() + TimeSpan.FromMinutes(10));
         SendToDevice(s.DeviceId, "session.close", s.Id, new JsonObject { ["reason"] = reason });

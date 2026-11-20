@@ -44,6 +44,9 @@ public sealed class HostSession : IAsyncDisposable
     public event Action<HostSession, byte[]>? FileChunk;
     public event Action<HostSession>? Closed;
 
+    /// <summary>Bulk-data high-water mark on the file channel (bytes).</summary>
+    public const ulong MaxFileBuffered = 256 * 1024;
+
     internal HostSession(SessionManager mgr, string id, string deviceId, string resumeToken, RTCConfiguration config)
     {
         _mgr = mgr;
@@ -316,7 +319,8 @@ public sealed class HostSession : IAsyncDisposable
     public async Task SendFileChunkAsync(byte[] frame, CancellationToken ct)
     {
         var dc = _file ?? throw new RpcException("no_channel", "file channel not open");
-        while (dc.bufferedAmount > 4 * 1024 * 1024) await Task.Delay(5, ct).ConfigureAwait(false);
+        // Keep the shared SCTP association shallow so ctl/input messages never queue behind bulk data.
+        while (dc.bufferedAmount > MaxFileBuffered) await Task.Delay(2, ct).ConfigureAwait(false);
         lock (dc) dc.send(frame, 0, frame.Length);
     }
 

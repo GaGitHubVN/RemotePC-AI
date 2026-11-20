@@ -21,7 +21,10 @@ internal sealed class TestPhone : IAsyncDisposable
     private readonly Func<Envelope, Task> _sendToHost;
     private long _seq = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     private RTCPeerConnection? _pc;
-    private RTCDataChannel? _ctl, _mv, _in;
+    private RTCDataChannel? _ctl, _mv, _in, _file;
+    public ConcurrentQueue<byte[]> FileFrames { get; } = new();
+    public void SendFileFrame(byte[] frame) => _file!.send(frame, 0, frame.Length);
+    public ulong FileBuffered => _file?.bufferedAmount ?? 0;
     private long _rpcId;
     private readonly ConcurrentDictionary<long, TaskCompletionSource<JsonObject>> _pending = new();
 
@@ -97,7 +100,8 @@ internal sealed class TestPhone : IAsyncDisposable
         _ctl = await _pc.createDataChannel("ctl");
         _mv = await _pc.createDataChannel("mv", new RTCDataChannelInit { ordered = false, maxRetransmits = 0 });
         _in = await _pc.createDataChannel("in");
-        await _pc.createDataChannel("file");
+        _file = await _pc.createDataChannel("file");
+        _file.onmessage += (_, _, data) => FileFrames.Enqueue(data);
         _ctl.onmessage += (_, _, data) =>
         {
             var o = (JsonObject)JsonNode.Parse(data)!;
