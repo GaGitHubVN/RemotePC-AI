@@ -129,7 +129,8 @@ class _RootShellState extends State<RootShell> {
   }
 
   Future<void> _configureNative() async {
-    if (!PlatformUi.isGlass || _configuredLang == AppState.instance.language) return;
+    // NATIVE_TABS=false is a test-only switch used by CI to isolate native tab bar issues.
+    if (!PlatformUi.isGlass || !const bool.fromEnvironment('NATIVE_TABS', defaultValue: true) || _configuredLang == AppState.instance.language) return;
     _configuredLang = AppState.instance.language;
     final ok = await NativeTabBar.configure([for (final t in _tabs) NativeTab(tr(t.key), t.icon.sf, t.sfSelected)], _tab);
     if (mounted && ok != _native) setState(() => _native = ok);

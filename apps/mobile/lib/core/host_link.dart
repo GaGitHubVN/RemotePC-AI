@@ -258,7 +258,15 @@ class HostLink extends ChangeNotifier {
 
   // ---------------- session ----------------
 
-  Future<void> connect() async {
+  Future<void>? _connecting;
+
+  /// Starts a connection, or joins the one already in progress (screens may call this concurrently).
+  Future<void> connect() {
+    if (state == LinkState.connected) return Future.value();
+    return _connecting ??= _connect().whenComplete(() => _connecting = null);
+  }
+
+  Future<void> _connect() async {
     _userClosed = false;
     _retryTimer?.cancel();
     try {

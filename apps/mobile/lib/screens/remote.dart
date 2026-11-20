@@ -62,7 +62,10 @@ class _RemoteScreenState extends State<RemoteScreen> {
       _bindStream();
     });
     link.addListener(_bindStream);
-    if (!link.isConnected && link.state != LinkState.negotiating && link.state != LinkState.openingSession) link.connect();
+    // Never notify listeners during build: start (or join) the connection after the first frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !link.isConnected) link.connect();
+    });
   }
 
   void _bindStream() {

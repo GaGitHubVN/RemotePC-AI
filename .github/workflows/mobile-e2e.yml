@@ -25,10 +25,17 @@ jobs:
             runner: macos-26
             os: '26'
             style: glass
+            tabs: 'true'
+          - name: ios26-flutter-tabs
+            runner: macos-26
+            os: '26'
+            style: glass
+            tabs: 'false'
           - name: ios18
             runner: macos-26
             os: '18'
             style: cupertino
+            tabs: 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     steps:
@@ -103,9 +110,10 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/shots"
           URI=$(cat /tmp/pair.txt)
           UDID=${{ steps.sim.outputs.udid }}
+          xcrun simctl spawn "$UDID" log stream --level debug --style compact --predicate 'process == "Runner"' > /tmp/sim.log 2>&1 &
           set -o pipefail
           flutter test integration_test/app_test.dart -d "$UDID" \
-            --dart-define=PAIR_URI="$URI" --dart-define=EXPECT_STYLE=${{ matrix.style }} 2>&1 | while IFS= read -r line; do
+            --dart-define=PAIR_URI="$URI" --dart-define=PAIR_HTTP=http://127.0.0.1:45901/ --dart-define=EXPECT_STYLE=${{ matrix.style }} --dart-define=NATIVE_TABS=${{ matrix.tabs }} 2>&1 | while IFS= read -r line; do
             echo "$line"
             case "$line" in
               *SHOT:*)
@@ -140,6 +148,9 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/shots/crash"
           cp ~/Library/Logs/DiagnosticReports/*Runner* "$GITHUB_WORKSPACE/shots/crash/" 2>/dev/null || true
           cp /tmp/testhost.log "$GITHUB_WORKSPACE/shots/" 2>/dev/null || true
+          grep -E 'RemotePCNative|Terminating|crash|exception|SpringBoard' /tmp/sim.log | head -200 > "$GITHUB_WORKSPACE/shots/native.log" || true
+          cp /tmp/sim.log "$GITHUB_WORKSPACE/shots/sim-full.log" 2>/dev/null || true
+          cat "$GITHUB_WORKSPACE/shots/native.log" || true
           ls -la "$GITHUB_WORKSPACE/shots" "$GITHUB_WORKSPACE/shots/crash"
 
       - uses: actions/upload-artifact@v4

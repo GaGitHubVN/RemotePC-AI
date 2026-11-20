@@ -88,14 +88,17 @@ final class NativeShell: NSObject {
       guard NativeShell.glassAvailable else { result(false); return }
       let items = (args["items"] as? [[String: Any]]) ?? []
       let selected = args["selected"] as? Int ?? 0
+      NSLog("RemotePCNative: tabbar.configure items=%d windows=%d", items.count, NativeShell.keyWindows().count)
+      for w in NativeShell.keyWindows() { NSLog("RemotePCNative: window key=%d hidden=%d root=%@", w.isKeyWindow ? 1 : 0, w.isHidden ? 1 : 0, String(describing: type(of: w.rootViewController))) }
       if tabs == nil {
         guard let window = NativeShell.keyWindows().first(where: { $0.rootViewController is FlutterViewController }),
-              let flutter = window.rootViewController as? FlutterViewController else { result(false); return }
+              let flutter = window.rootViewController as? FlutterViewController else { NSLog("RemotePCNative: no FlutterViewController root"); result(false); return }
         let t = NativeTabController(flutter: flutter) { [weak self] i in self?.tabChannel?.invokeMethod("selected", arguments: i) }
         tabs = t
         t.configure(items: items, selected: selected)
         window.rootViewController = t
         t.embedFlutter(at: selected, initial: true)
+        NSLog("RemotePCNative: root swapped; window key=%d hidden=%d flutterInWindow=%d", window.isKeyWindow ? 1 : 0, window.isHidden ? 1 : 0, flutter.view.window != nil ? 1 : 0)
       } else {
         tabs?.configure(items: items, selected: selected)
       }

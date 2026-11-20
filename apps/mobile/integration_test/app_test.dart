@@ -21,6 +21,19 @@ import 'package:remotepc_ai/ui/platform_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const pairUri = String.fromEnvironment('PAIR_URI');
+const pairHttp = String.fromEnvironment('PAIR_HTTP');
+
+/// A fresh single-use offer from the test host (offers expire after 5 minutes).
+Future<String> freshPairUri() async {
+  if (pairHttp.isEmpty) return pairUri;
+  final c = HttpClient();
+  try {
+    final r = await (await c.getUrl(Uri.parse(pairHttp))).close();
+    return await r.transform(const SystemEncoding().decoder).join();
+  } finally {
+    c.close();
+  }
+}
 const expectStyle = String.fromEnvironment('EXPECT_STYLE');
 
 void main() {
@@ -50,7 +63,7 @@ void main() {
   }
 
   testWidgets('pair, connect, remote video, input, chat, files, settings', (t) async {
-    expect(pairUri, isNotEmpty, reason: 'run with --dart-define=PAIR_URI=…');
+    expect(pairUri.isNotEmpty || pairHttp.isNotEmpty, isTrue, reason: 'run with --dart-define=PAIR_HTTP=… or PAIR_URI=…');
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarded', true);
     await prefs.setString('language', 'vi');
@@ -67,7 +80,7 @@ void main() {
     await shot(t, '01-home-empty');
 
     // ---- pairing (same code path as the QR scanner; the test host auto-approves) ----
-    final inv = PairingInvite.parseQr(pairUri);
+    final inv = PairingInvite.parseQr(await freshPairUri());
     String? verify;
     final host = await HostLink.pair(s.keys, inv, 'Simulator', s.platformName, (c) => verify = c);
     expect(verify, hasLength(6));

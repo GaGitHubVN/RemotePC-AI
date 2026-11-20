@@ -81,6 +81,24 @@ if (uriFile is not null) File.WriteAllText(uriFile, uri);
 Log($"listening on {lan.Port}");
 Console.WriteLine("PAIR_URI=" + uri);
 
+// Fresh single-use pairing offer on demand (offers expire after 5 minutes; CI builds take longer than that).
+using var http2 = new System.Net.HttpListener();
+http2.Prefixes.Add($"http://127.0.0.1:{lan.Port + 1}/");
+http2.Start();
+_ = Task.Run(async () =>
+{
+    while (http2.IsListening)
+    {
+        var ctx = await http2.GetContextAsync();
+        var o = pairing.CreateOffer(PairingMode.Qr);
+        var body = System.Text.Encoding.UTF8.GetBytes(pairing.BuildQrUri(o, "CI-TestHost", null, [$"127.0.0.1:{lan.Port}"]));
+        Log("issued a fresh pairing offer over HTTP");
+        ctx.Response.ContentType = "text/plain";
+        await ctx.Response.OutputStream.WriteAsync(body);
+        ctx.Response.Close();
+    }
+});
+
 var stop = new TaskCompletionSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.TrySetResult(); };
 AppDomain.CurrentDomain.ProcessExit += (_, _) => stop.TrySetResult();
