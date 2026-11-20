@@ -7,6 +7,8 @@
   <ItemGroup>
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageReference Include="SIPSorcery" Version="10.0.17" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="RemotePC.Core.Tests" />
