@@ -84,6 +84,10 @@ jobs:
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 || true
           xcrun simctl ui "$UDID" appearance light || true
+          # Headless iOS 26 simulators may keep a freshly launched app in the background; run the Simulator UI and
+          # let SpringBoard finish starting so the app under test comes to the foreground.
+          open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
+          sleep 25
 
       - uses: actions/setup-dotnet@v4
         with:

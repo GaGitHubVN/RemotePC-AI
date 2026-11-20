@@ -186,12 +186,21 @@ class HostLink extends ChangeNotifier {
       case 'session.reject':
         _sessionWaiters.remove(p['reqId'])?.complete({...p, '_typ': env.typ});
       case 'webrtc.answer':
-        if (env.sid == sid) await _pc?.setRemoteDescription(RTCSessionDescription(p['sdp'] as String, 'answer'));
+        if (env.sid == sid && _pc != null) {
+          await _pc!.setRemoteDescription(RTCSessionDescription(p['sdp'] as String, 'answer'));
+          _remoteSet = true;
+          for (final c in [..._pendingIce]) {
+            await _addIce(c);
+          }
+          _pendingIce.clear();
+        }
       case 'webrtc.ice':
         if (env.sid == sid && (p['candidate'] as String?)?.isNotEmpty == true) {
           // Never pass null to the native layer (NSNull crashes on iOS).
           final mid = p['sdpMid'], idx = p['sdpMLineIndex'];
-          await _pc?.addCandidate(RTCIceCandidate(p['candidate'] as String, mid is String ? mid : '0', idx is num ? idx.toInt() : 0));
+          final cand = RTCIceCandidate(p['candidate'] as String, mid is String ? mid : '0', idx is num ? idx.toInt() : 0);
+          // Candidates can arrive before the answer has been applied: queue them until then.
+          _remoteSet ? await _addIce(cand) : _pendingIce.add(cand);
         }
       case 'session.close':
         if (env.sid == sid) {
@@ -205,6 +214,18 @@ class HostLink extends ChangeNotifier {
             _set(LinkState.closed, reason);
           }
         }
+    }
+  }
+
+  bool _remoteSet = false;
+  final _pendingIce = <RTCIceCandidate>[];
+  Future<void> _envChain = Future.value();
+
+  Future<void> _addIce(RTCIceCandidate c) async {
+    try {
+      await _pc?.addCandidate(c);
+    } catch (e) {
+      debugPrint('ICE candidate rejected: $e');
     }
   }
 
@@ -276,7 +297,8 @@ class HostLink extends ChangeNotifier {
       final (sig, how) = await openTransport(keys, host.lanEndpoints, host.signalingUrl);
       _sig = sig;
       transport = how;
-      _envSub = sig.envelopes.listen(_onEnvelope);
+      // Envelopes are handled strictly in order (answer before its candidates).
+      _envSub = sig.envelopes.listen((e) => _envChain = _envChain.then((_) => _onEnvelope(e)).catchError((Object err) => debugPrint('envelope: $err')));
       sig.errors.listen((e) {
         if (e == 'closed' && !_userClosed && state != LinkState.closed) _scheduleReconnect('transport closed');
       });
@@ -328,6 +350,8 @@ class HostLink extends ChangeNotifier {
 
   Future<void> _startPeer(List<Map<String, dynamic>> iceServers) async {
     await _teardownPeer();
+    _remoteSet = false;
+    _pendingIce.clear();
     _set(LinkState.negotiating);
     final clean = sanitizeIceServers(iceServers);
     final pc = await createPeerConnection({
