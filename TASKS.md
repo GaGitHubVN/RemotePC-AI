@@ -1,7 +1,8 @@
 # Tasks & status
 
 Status vocabulary: NOT STARTED · IN PROGRESS · IMPLEMENTED · BUILD PASSED · TEST PASSED · TEST FAILED · NOT VERIFIED · BLOCKED · RELEASE READY.
-Nothing is RELEASE READY: no phone/device verification has been possible yet.
+Nothing is RELEASE READY: the app is verified end-to-end on iOS 18 and iOS 26 **simulators** (and the Android emulator job,
+see TEST_REPORT), not yet on physical phones.
 
 | Area | Item | Status |
 |---|---|---|
@@ -23,14 +24,19 @@ Nothing is RELEASE READY: no phone/device verification has been possible yet.
 | Host | WPF UI (9 sections, vi/en, themes, banner, dialogs) | BUILD PASSED (manual smoke check of dashboard) |
 | Host | Portable single-file package | BUILD PASSED + smoke test |
 | Mobile | Crypto/protocol | TEST PASSED |
-| Mobile | All screens (pair, remote, chat, agent, files, settings, diagnostics) | BUILD PASSED (Android) — NOT VERIFIED on device |
-| Mobile | iOS 26 Liquid Glass platform view | IMPLEMENTED — NOT VERIFIED (needs Xcode 26 build) |
-| CI/CD | ci, build-windows, build-android, build-ios, release | IMPLEMENTED — NOT VERIFIED (not pushed) |
+| Mobile | Crash on Connect (NSNull in iceServers) | FIXED — regression tests in C# and Dart; E2E connects on iOS simulators |
+| Mobile | UI selection by OS (native `#available(iOS 26.0, *)`) | TEST PASSED (simulators: iOS 26.5 → Liquid Glass, iOS 18.6 → iOS 18 design) |
+| Mobile | iOS 26: system UITabBarController tab bar, SwiftUI `.glass`/`.glassProminent` buttons, GlassEffectContainer toolbar, UIAlertController | TEST PASSED on simulator (screenshots) — NOT VERIFIED on device |
+| Mobile | iOS 18: Cupertino design, system alerts | TEST PASSED on simulator — NOT VERIFIED on device |
+| Mobile | Pair → WebRTC video → input → chat → files → tabs (E2E vs real Core) | TEST PASSED on iOS 26.5 and 18.6 simulators |
+| Mobile | Android Material 3 UI | BUILD PASSED; emulator E2E see TEST_REPORT — NOT VERIFIED on device |
+| CI/CD | ci, build-windows, build-android, build-ios, mobile-e2e, release | ci / windows / android / iOS IPA / iOS E2E: PASSED on GitHub Actions |
 
 ## Known limitations
 
-1. **No phone testing yet** — every mobile behaviour is unverified on real devices/simulators.
-2. **iOS IPA not built** — requires pushing to GitHub (pending your approval) and a macOS 26 runner.
+1. **No physical phone testing yet** — simulators prove code paths and UI branches, not performance, camera QR scanning,
+   real Wi-Fi/cellular switching or the signing step.
+2. **Simulator video is ~8–17 fps** (software decode in the simulator); real-device decode is hardware and NOT VERIFIED.
 3. **SCTP throughput** of the host WebRTC stack ≈ 205 KiB/s (loopback, SIPSorcery↔SIPSorcery). Plan: tune SCTP window /
    multiple channels, or a direct authenticated TLS channel for bulk LAN transfers.
 4. **Remote audio** is not implemented (permission exists; WASAPI loopback → Opus is the planned module).
@@ -46,7 +52,7 @@ Nothing is RELEASE READY: no phone/device verification has been possible yet.
 
 ## Next steps (in order)
 
-1. Push to a private GitHub repo → run CI + iOS workflow → fix any runner-specific failures.
+1. Sign the IPA with your tool; install on iOS 18 and iOS 26 iPhones; run scenarios 1–7.
 2. Install APK on an Android 9+ phone and the signed IPA on iOS 18 and 26 devices; run scenarios 1–7.
 3. Deploy signaling + coturn on a VPS; run scenario 8 (cellular ↔ home NAT).
 4. Pull a 7B+ tool model and re-run the agent examples 1–5.

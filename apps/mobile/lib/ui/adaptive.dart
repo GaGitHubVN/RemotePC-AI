@@ -237,7 +237,15 @@ class Section extends StatelessWidget {
     if (PlatformUi.isIOS) {
       final radius = PlatformUi.isGlass ? 26.0 : 10.0;
       return CupertinoListSection.insetGrouped(
-        header: header == null ? null : Text(header!),
+        // iOS 18: small uppercase footnote; iOS 26: sentence case, slightly larger. Both secondary label colour.
+        header: header == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Text(PlatformUi.isGlass ? header! : header!.toUpperCase(),
+                    style: TextStyle(fontSize: PlatformUi.isGlass ? 15 : 13, fontWeight: PlatformUi.isGlass ? FontWeight.w600 : FontWeight.w400,
+                        letterSpacing: PlatformUi.isGlass ? 0 : 0.2, color: CupertinoColors.secondaryLabel.resolveFrom(context))),
+              ),
         footer: footer == null ? null : Text(footer!, style: TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel.resolveFrom(context))),
         backgroundColor: Colors.transparent,
         decoration: BoxDecoration(color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(context), borderRadius: BorderRadius.circular(radius)),

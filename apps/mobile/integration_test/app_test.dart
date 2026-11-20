@@ -146,6 +146,23 @@ void main() {
     }
     await shot(t, '08-ai-tab');
 
+    // ---- dark mode through the app's own Theme setting (also switches native chrome) ----
+    s.themeMode = 'dark';
+    await s.savePrefs();
+    await PlatformUi.setThemeMode('dark');
+    if (PlatformUi.isGlass && NativeTabBar.active) {
+      NativeTabBar.select(0);
+    } else {
+      await t.tap(find.text('Máy tính').last);
+    }
+    await shot(t, '09-dark-home');
+    openRemote(t.element(find.byType(HomeScreen, skipOffstage: false)), host);
+    await shot(t, '10-dark-remote');
+    Navigator.of(t.element(find.byType(app.RootShell, skipOffstage: false)), rootNavigator: true).pop();
+    await settle(t);
+    s.themeMode = 'system';
+    await s.savePrefs();
+
     await link.disconnect();
     await settle(t);
   });
