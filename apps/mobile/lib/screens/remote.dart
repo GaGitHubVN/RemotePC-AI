@@ -304,6 +304,15 @@ class _RemoteScreenState extends State<RemoteScreen> {
         _clipboard();
       case 'stats':
         pushRoot(context, DiagnosticsScreen(link: link));
+      case 'more':
+        final v = await showActions(context, actions: [
+          DialogAction('display', tr('display')),
+          DialogAction('quality', tr('quality')),
+          DialogAction('clipboard', tr('clipboard')),
+          DialogAction('stats', tr('diagnostics')),
+          DialogAction('cancel', tr('cancel'), cancel: true),
+        ]);
+        if (v != null) await _action(v);
       case 'disconnect':
         await link.disconnect();
         if (mounted) Navigator.of(context).pop();
@@ -373,13 +382,10 @@ class _RemoteScreenState extends State<RemoteScreen> {
         _ToolItem('keyboard', Icons.keyboard, CupertinoIcons.keyboard, 'keyboard', tr('keyboard'), active: _keyboard),
         _ToolItem('mode', _trackpad ? Icons.touch_app : Icons.pan_tool_alt, _trackpad ? CupertinoIcons.hand_point_left : CupertinoIcons.hand_draw,
             _trackpad ? 'hand.point.up.left' : 'hand.tap', _trackpad ? tr('trackpad') : tr('touch')),
-        _ToolItem('display', Icons.monitor, CupertinoIcons.tv, 'display.2', tr('display')),
         _ToolItem('screenshot', Icons.photo_camera, CupertinoIcons.camera, 'camera', tr('screenshot')),
-        _ToolItem('quality', Icons.hd, CupertinoIcons.slider_horizontal_3, 'dial.medium', tr('quality')),
         _ToolItem('cursor', Icons.mouse, CupertinoIcons.cursor_rays, 'cursorarrow', tr('cursor'), active: _showCursor),
-        _ToolItem('clipboard', Icons.content_paste, CupertinoIcons.doc_on_clipboard, 'doc.on.clipboard', tr('clipboard')),
         _ToolItem('ai', Icons.auto_awesome, CupertinoIcons.sparkles, 'sparkles', 'AI'),
-        _ToolItem('stats', Icons.speed, CupertinoIcons.speedometer, 'speedometer', tr('diagnostics')),
+        _ToolItem('more', Icons.more_horiz, CupertinoIcons.ellipsis_circle, 'ellipsis', tr('more')),
         _ToolItem('disconnect', Icons.close, CupertinoIcons.xmark, 'xmark', tr('disconnect'), destructive: true),
       ];
 

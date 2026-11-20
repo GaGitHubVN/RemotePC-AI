@@ -1,4 +1,4 @@
-name: Mobile E2E (iOS Simulator)
+name: Mobile E2E (iOS Simulator + Android emulator)
 
 # Runs the real app on iOS Simulators against tools/RemotePC.TestHost (real RemotePC.Core over loopback):
 # pairing → WebRTC video → input → RPC → file transfer, plus native screenshots of each screen.
@@ -26,11 +26,6 @@ jobs:
             os: '26'
             style: glass
             tabs: 'true'
-          - name: ios26-flutter-tabs
-            runner: macos-26
-            os: '26'
-            style: glass
-            tabs: 'false'
           - name: ios18
             runner: macos-26
             os: '18'
@@ -153,4 +148,58 @@ jobs:
         if: always()
         with:
           name: e2e-${{ matrix.name }}
+          path: shots/
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Start RemotePC.TestHost (CI-only, auto-approves pairing)
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/shots"
+          dotnet build apps/windows-host/tools/RemotePC.TestHost -c Release
+          nohup dotnet apps/windows-host/tools/RemotePC.TestHost/bin/Release/net10.0/RemotePC.TestHost.dll 45900 /tmp/pair.txt "$GITHUB_WORKSPACE/shots" > /tmp/testhost.log 2>&1 &
+          for i in $(seq 1 60); do [ -s /tmp/pair.txt ] && break; sleep 1; done
+          test -s /tmp/pair.txt
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.50.1
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: apps/mobile
+      - name: Run integration test on an Android 15 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash scripts/ci/android-e2e.sh
+      - name: Assert the host saw the phone's input and transfers
+        run: |
+          cat /tmp/testhost.log
+          grep -q "pairing result ok=True" /tmp/testhost.log
+          grep -q "INPUT button left" /tmp/testhost.log
+          grep -q "upload completed upload-test.txt" /tmp/testhost.log
+      - if: always()
+        run: cp /tmp/testhost.log shots/ || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-android
           path: shots/

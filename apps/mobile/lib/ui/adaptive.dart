@@ -201,19 +201,23 @@ class AppPage extends StatelessWidget {
     return CupertinoPageScaffold(
       backgroundColor: bg,
       navigationBar: bar,
-      child: Material(
-        type: MaterialType.transparency,
-        child: Column(children: [
-          Expanded(
-            child: CustomScrollView(controller: controller, slivers: [
-              SliverToBoxAdapter(child: SizedBox(height: MediaQuery.paddingOf(context).top + (glass ? 8 : 0))),
-              if (onRefresh != null) CupertinoSliverRefreshControl(onRefresh: onRefresh),
-              ...slivers,
-              SliverToBoxAdapter(child: SizedBox(height: 24 + (bottom == null ? MediaQuery.paddingOf(context).bottom : 0))),
-            ]),
-          ),
-          ?bottom,
-        ]),
+      // Builder: the scaffold adds the translucent bar's height to MediaQuery padding for its child; reading it from
+      // the outer context would put the first rows underneath the navigation bar.
+      child: Builder(
+        builder: (inner) => Material(
+          type: MaterialType.transparency,
+          child: Column(children: [
+            Expanded(
+              child: CustomScrollView(controller: controller, slivers: [
+                SliverToBoxAdapter(child: SizedBox(height: MediaQuery.paddingOf(inner).top + (glass ? 8 : 0))),
+                if (onRefresh != null) CupertinoSliverRefreshControl(onRefresh: onRefresh),
+                ...slivers,
+                SliverToBoxAdapter(child: SizedBox(height: 24 + (bottom == null ? MediaQuery.paddingOf(inner).bottom : 0))),
+              ]),
+            ),
+            ?bottom,
+          ]),
+        ),
       ),
     );
   }

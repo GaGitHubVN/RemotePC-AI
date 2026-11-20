@@ -155,6 +155,15 @@ static async Task<string> Run(string file, string arguments)
 static async Task<string> ShotAsync(string dir, string name)
 {
     Directory.CreateDirectory(dir);
+    if (!OperatingSystem.IsMacOS())
+    {
+        // Android emulator (Linux CI): adb screencap.
+        var file = Path.Combine(dir, $"{name}-android.png");
+        using var p = Process.Start(new ProcessStartInfo("adb", "exec-out screencap -p") { RedirectStandardOutput = true })!;
+        await using (var fs = File.Create(file)) await p.StandardOutput.BaseStream.CopyToAsync(fs);
+        await p.WaitForExitAsync();
+        return $"android {new FileInfo(file).Length} bytes";
+    }
     var json = JsonNode.Parse(await Run("xcrun", "simctl list devices booted -j"));
     var parts = new List<string>();
     foreach (var (runtime, devs) in json?["devices"]?.AsObject() ?? [])

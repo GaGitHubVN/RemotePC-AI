@@ -37,7 +37,7 @@ const _vi = <String, String>{
   'saved_verified': 'Đã tải xong · SHA-256 khớp', 'folder_empty': 'Thư mục trống', 'choose_pc': 'Chọn máy tính', 'plan': 'Kế hoạch', 'no_models': 'Chưa có model nào trên PC. Tải model trong Ollama hoặc LM Studio trên máy tính.',
   'providers': 'Nguồn AI trên PC', 'models': 'Model', 'remove_confirm': 'Điện thoại sẽ quên máy tính này. Muốn dùng lại phải ghép nối lại.',
   'reset_confirm': 'Xóa khóa của điện thoại này và mọi máy tính đã ghép nối.', 'about_text': 'Điều khiển máy tính Windows và dùng AI chạy trên máy tính của bạn. Kết nối mã hóa đầu-cuối.',
-  'show_screenshot': 'Xem ảnh chụp', 'connection': 'Kết nối', 'steps': 'bước', 'remote_state': 'Trạng thái', 'cursor': 'Con trỏ',
+  'show_screenshot': 'Xem ảnh chụp', 'connection': 'Kết nối', 'steps': 'bước', 'remote_state': 'Trạng thái', 'cursor': 'Con trỏ', 'more': 'Thêm',
   'protection': 'Cách kết nối được bảo vệ', 'protection_text': 'Khóa lưu trong Keychain / Android Keystore. Tin nhắn signaling được mã hóa đầu-cuối (X25519 + AES-256-GCM); video và dữ liệu dùng WebRTC DTLS-SRTP. Máy tính kiểm tra quyền cho mọi yêu cầu.',
   'paired_pcs': 'Máy tính đã ghép nối', 'this_phone': 'Điện thoại này', 'thinking': 'Đang suy nghĩ…', 'too_large': 'Ảnh quá lớn (tối đa 6 MB).', 'no_vision': 'Model đang chọn không xem được ảnh. Hãy chọn model có vision.',
 };
@@ -73,7 +73,7 @@ const _en = <String, String>{
   'saved_verified': 'Downloaded · SHA-256 verified', 'folder_empty': 'This folder is empty', 'choose_pc': 'Choose a PC', 'plan': 'Plan', 'no_models': 'No models on the PC yet. Download one in Ollama or LM Studio on the PC.',
   'providers': 'AI providers on the PC', 'models': 'Models', 'remove_confirm': 'This phone will forget the PC. You will need to pair again to use it.',
   'reset_confirm': 'Deletes this phone\'s keys and every paired PC.', 'about_text': 'Control your Windows PC and use the AI that runs on it. End-to-end encrypted.',
-  'show_screenshot': 'Show screenshot', 'connection': 'Connection', 'steps': 'steps', 'remote_state': 'State', 'cursor': 'Cursor',
+  'show_screenshot': 'Show screenshot', 'connection': 'Connection', 'steps': 'steps', 'remote_state': 'State', 'cursor': 'Cursor', 'more': 'More',
   'protection': 'How your connection is protected', 'protection_text': 'Keys are stored in the Keychain / Android Keystore. Signaling messages are end-to-end encrypted (X25519 + AES-256-GCM); video and data use WebRTC DTLS-SRTP. The PC checks permissions for every request.',
   'paired_pcs': 'Paired PCs', 'this_phone': 'This phone', 'thinking': 'Thinking…', 'too_large': 'Image too large (max 6 MB).', 'no_vision': 'The selected model cannot see images. Choose a vision model.',
 };
