@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/RemotePC.Core/RemotePC.Core.csproj" />
+    <Project Path="src/RemotePC.Platform.Windows/RemotePC.Platform.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RemotePC.Core.Tests/RemotePC.Core.Tests.csproj" />
+    <Project Path="tests/RemotePC.Platform.Windows.Tests/RemotePC.Platform.Windows.Tests.csproj" />
   </Folder>
 </Solution>
