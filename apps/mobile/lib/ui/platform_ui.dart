@@ -23,7 +23,7 @@ class PlatformUi {
   static Future<void> init() async {
     if (!Platform.isIOS) {
       style = UiStyle.material;
-      osMajor = int.tryParse(RegExp(r'\d+').firstMatch(Platform.operatingSystemVersion)?.group(0) ?? '') ?? 0;
+      osMajor = 0; // dart:io only exposes the kernel string on Android; the UI does not depend on the version
       return;
     }
     bool? glass;

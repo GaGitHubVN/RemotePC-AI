@@ -45,3 +45,6 @@ key.properties
 backend/turn/turnserver.conf
 .claude/settings.local.json
 releases/**/SHA256SUMS.txt
+
+# Local E2E screenshots
+.e2e-android/

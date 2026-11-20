@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.0 — 2026-11-20 (pre-release; verified on iOS 18/26 simulators and Android 14 emulator, not on phones)
+
+### Fixed
+- iOS: app crashed on every action that connects (Connect, Chat, Files, Tasks). The PC sent `"username": null` in
+  ICE servers; flutter_webrtc on iOS passes it to RTCIceServer as NSNull. The PC no longer sends null fields and the
+  app sanitises ICE servers and candidates before they reach native code.
+- ICE candidates could be applied before the SDP answer (envelopes were handled concurrently) → now in order, queued.
+- Remote screen started a second connection during build.
+- Rows hidden under translucent navigation bars; missing Cupertino icon font.
+
+### Changed
+- UI chosen at runtime from the OS (`#available(iOS 26.0, *)` in native code):
+  iOS 26+ Liquid Glass — system UITabBarController tab bar, SwiftUI `.glass`/`.glassProminent` buttons and bar groups,
+  GlassEffectContainer remote toolbar, UIAlertController alerts/action sheets/prompts;
+  iOS 18–25 — iOS 18 design (Cupertino); Android — Material 3.
+- Per-tab navigation stacks; full-screen flows hide the tab bar; compact remote toolbar with a More menu.
+
+### Added
+- `tools/RemotePC.TestHost` (CI/test only) and mobile E2E on iOS simulators (GitHub Actions) and Android emulator.
+
 ## 0.1.0 — 2026-11-20 (pre-release, not device-verified)
 
 ### Added

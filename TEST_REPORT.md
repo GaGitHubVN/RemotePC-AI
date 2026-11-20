@@ -37,7 +37,7 @@ auto-approves pairing; replays a synthetic H.264 clip). Screenshots are taken na
 |---|---|---|---|
 | iPhone 17 Pro Max, iOS 26.5 | `glass` — system UITabBarController tab bar, SwiftUI `.glass`/`.glassProminent` buttons, GlassEffectContainer toolbar | **TEST PASSED** (2 consecutive runs) | pair → WebRTC connected (direct LAN) → H.264 1280×720 decoded → tap reached host (`INPUT button left`) → chat RPC → fs.roots/fs.list → download 300 KiB SHA-256 ok → upload SHA-256 ok → native tab switch → settings shows "Liquid Glass · iOS 26" |
 | iPhone 16 Pro Max, iOS 18.6 | `cupertino` — iOS 18 design | **TEST PASSED** (2 consecutive runs) | same flow; settings shows "iOS 18" |
-| Android 14 emulator | `material` | **NOT VERIFIED** | emulator did not boot on the runner (disk space; workflow fixed but not re-run — Actions billing limit reached) |
+| Android 14 emulator (Pixel 7 AVD, x86_64, on the dev PC; `scripts/test/mobile-e2e-android.ps1`) | `material` — Material 3 | **TEST PASSED** | same flow incl. video (1280×720, direct STUN path), tap → `INPUT button left`, download/upload SHA-256 ok, light + dark screenshots. CI job: emulator did not boot (runner disk space; fixed, not re-run — Actions billing limit) |
 
 Bugs found and fixed by this suite: iOS crash on Connect (`"username": null` → NSNull inside flutter_webrtc), duplicate
 `connect()` from `initState` (notify during build), ICE candidates applied before the SDP answer (envelopes now handled in
