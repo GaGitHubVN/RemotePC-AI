@@ -1,0 +1,18 @@
+name = "remotepc-signaling"
+main = "src/worker/index.ts"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "SIGNAL"
+class_name = "SignalRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SignalRoom"]
+
+# Secrets (never commit): `wrangler secret put TURN_SECRET`
+# Plain vars:
+[vars]
+STUN_URLS = "stun:stun.cloudflare.com:3478"
+TURN_URLS = ""

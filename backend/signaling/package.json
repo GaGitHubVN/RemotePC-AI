@@ -1,0 +1,28 @@
+{
+  "name": "@remotepc/signaling",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "RemotePC AI signaling relay (Node + Cloudflare Durable Objects)",
+  "engines": { "node": ">=22.6" },
+  "scripts": {
+    "start": "node --experimental-strip-types src/node/main.ts",
+    "dev": "node --experimental-strip-types --watch src/node/main.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "vectors": "node --experimental-strip-types scripts/gen-vectors.ts",
+    "worker:dev": "wrangler dev",
+    "worker:deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "ws": "^8.23.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261120.1",
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.1"
+  }
+}

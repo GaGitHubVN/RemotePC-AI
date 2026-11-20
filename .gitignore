@@ -1,0 +1,46 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+artifacts/
+
+# Node
+node_modules/
+dist/
+.wrangler/
+coverage/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.iml
+.idea/
+apps/mobile/android/local.properties
+apps/mobile/android/.gradle/
+apps/mobile/ios/Pods/
+apps/mobile/ios/.symlinks/
+apps/mobile/ios/Flutter/Generated.xcconfig
+apps/mobile/ios/Flutter/flutter_export_environment.sh
+
+# Release outputs (published via GitHub Releases, not committed)
+releases/**/*.zip
+releases/**/*.apk
+releases/**/*.ipa
+releases/**/*.exe
+releases/windows/RemotePC-AI-Windows-x64-Portable/
+
+# Secrets — never commit
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+key.properties
+.env
+.env.*
+!.env.example
+backend/turn/turnserver.conf
+.claude/settings.local.json
