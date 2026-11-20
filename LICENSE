@@ -1,0 +1,9 @@
+Copyright (c) 2026 the RemotePC AI authors. All rights reserved.
+
+No license has been chosen yet. Until the owner adds one, no permission is granted to use, copy, modify or
+distribute this software. (Replace this file with e.g. MIT or Apache-2.0 if you want to open-source it.)
+
+Third-party components keep their own licenses: .NET (MIT), SIPSorcery (BSD-3-Clause), BouncyCastle (MIT),
+Vortice.Windows (MIT), FlaUI (MIT), PdfPig (Apache-2.0), DocumentFormat.OpenXml (MIT), QRCoder (MIT),
+CommunityToolkit.Mvvm (MIT), Flutter (BSD-3-Clause), flutter_webrtc (MIT), libwebrtc (BSD-3-Clause),
+package:cryptography (Apache-2.0), ws (MIT), zod (MIT).

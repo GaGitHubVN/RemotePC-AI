@@ -44,3 +44,4 @@ key.properties
 !.env.example
 backend/turn/turnserver.conf
 .claude/settings.local.json
+releases/**/SHA256SUMS.txt

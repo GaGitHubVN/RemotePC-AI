@@ -1,0 +1,6 @@
+# TLS termination for the signaling WebSocket (automatic Let's Encrypt certificate).
+{$PUBLIC_HOST} {
+	@signal path /signal /healthz
+	reverse_proxy @signal 127.0.0.1:8787
+	respond 404
+}

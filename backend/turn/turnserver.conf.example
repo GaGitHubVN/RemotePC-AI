@@ -1,0 +1,37 @@
+# Copy to turnserver.conf (git-ignored) and replace the placeholders.
+listening-port=3478
+tls-listening-port=5349
+# Replace with the VPS public IP (and private IP if behind cloud NAT: external-ip=PUBLIC/PRIVATE)
+external-ip=203.0.113.10
+realm=turn.example.com
+server-name=turn.example.com
+
+# Time-limited credentials minted by the signaling server (HMAC-SHA1 of "expiry:deviceId").
+use-auth-secret
+static-auth-secret=REPLACE_WITH_THE_SAME_VALUE_AS_TURN_SECRET
+
+cert=/etc/coturn/certs/fullchain.pem
+pkey=/etc/coturn/certs/privkey.pem
+
+min-port=49160
+max-port=49999
+fingerprint
+no-cli
+no-multicast-peers
+# Never relay into private/internal networks of the TURN host (SSRF protection).
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+# Abuse limits
+user-quota=12
+total-quota=1200
+max-bps=12000000
+stale-nonce=600
+log-file=stdout
+simple-log

@@ -1,0 +1,38 @@
+# coturn TURN/STUN relay for RemotePC AI (see docs/deployment/NETWORK_SETUP.md).
+# Credentials are minted per device by the signaling server with the shared TURN_SECRET (coturn REST API);
+# there are no static users. Run on a VPS with a public IP.
+services:
+  coturn:
+    image: coturn/coturn:4.7
+    restart: unless-stopped
+    network_mode: host            # TURN needs the full relay port range; host networking avoids NAT-in-NAT
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - ./certs:/etc/coturn/certs:ro   # fullchain.pem + privkey.pem for turns:// (TLS on 5349)
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+
+  signaling:
+    build: ../signaling
+    restart: unless-stopped
+    environment:
+      PORT: "8787"
+      HOST: "127.0.0.1"           # expose through a TLS reverse proxy (Caddy below), never plain ws:// on the Internet
+      TRUST_PROXY: "1"
+      NODE_ENV: production
+      TURN_SECRET: ${TURN_SECRET:?set TURN_SECRET in .env (>= 32 random chars)}
+      TURN_URLS: "turn:${PUBLIC_HOST}:3478?transport=udp,turn:${PUBLIC_HOST}:3478?transport=tcp,turns:${PUBLIC_HOST}:5349?transport=tcp"
+      STUN_URLS: "stun:${PUBLIC_HOST}:3478"
+    network_mode: host
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST in .env}
+
+volumes:
+  caddy_data:
