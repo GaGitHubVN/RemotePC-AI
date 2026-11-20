@@ -137,4 +137,5 @@ jobs:
           path: apps/mobile/build/ios/ipa/*.ipa
       - name: Signing not configured
         if: env.HAS_SIGNING != 'true'
+        working-directory: .
         run: echo "Signing secrets not set; only the unsigned IPA was produced (by design)."

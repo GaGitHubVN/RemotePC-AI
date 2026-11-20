@@ -21,6 +21,7 @@ Date: 2026-11-20 · Commit: see `git log -1` · Status values as defined in the 
 | Local AI (xUnit, real Ollama) | 1 | **TEST PASSED** | discovery, real metadata (ctx 32768, tools ✓, vision ✗), streaming (first token 1073 ms cold, 114.5 tok/s), real tool call `screen_capture` |
 | Local AI agent (real Ollama, qwen2.5:0.5b) | 1 | **TEST FAILED** | the 0.5B model called `file_create` instead of `file_create_folder` and then claimed success; the engine's step log recorded the truth. Needs a ≥7B tool model — **NOT VERIFIED** |
 | Mobile (flutter test) | 6 | **TEST PASSED** | Dart crypto byte-identical to TS/C# vectors (keys, ids, Ed25519 sig, envelope key, ciphertext, pairing proofs, verify code), replay guard |
+| CI on GitHub Actions (ubuntu) | signaling + core + mobile | **TEST PASSED** | after fixing CA2027 raised by the newer SDK on the runner |
 | Static analysis | — | **PASSED** | .NET builds with warnings-as-errors + analyzers; `tsc --noEmit`; `flutter analyze` 0 errors/0 warnings (15 deprecation infos, see TASKS) |
 
 Measured numbers (dev PC, not targets): QSV encode 9.0 ms/frame and CPU BGRA→NV12 7.9 ms at 1080p→720p; software MFT 2.6 ms;
@@ -33,7 +34,7 @@ bulk upload 57 ms.
 |---|---|---|
 | `releases/windows/RemotePC-AI-Windows-x64-Portable.zip` (single 89 MB exe) | **BUILD PASSED**, smoke-tested | started from an isolated temp folder with `--smoke-test`: exit 0, DPAPI identity created, LAN endpoint up; UI rendered (screenshot reviewed) |
 | `releases/android/RemotePC-AI-Android-release.apk` (122 MB, debug-key signed) | **BUILD PASSED** | `aapt2`: minSdk 28, targetSdk 36, ABIs arm64-v8a/armeabi-v7a/x86_64, permissions listed in ANDROID_BUILD.md |
-| iOS unsigned IPA | **NOT VERIFIED** | workflow written; cannot run without GitHub push (needs your go-ahead) and macOS runner |
+| `releases/ios/RemotePC-AI-iOS-unsigned.ipa` (14 MB, unsigned) | **BUILD PASSED** on GitHub Actions `macos-26`, Xcode 26.6, iOS SDK 26.5 | `flutter test` 6/6 on macOS; `lipo`: arm64 device binary; `otool LC_BUILD_VERSION`: platform 2 (iOS, not simulator), minos 18.0, sdk 26.5; bundle id `ai.remotepc.app`; frameworks App/Flutter/WebRTC/objective_c all arm64; SHA-256 `fe235a20…3a640e`. Installed on a device: **NOT VERIFIED** (needs your signing tool + iPhone) |
 | Cloudflare Worker | **BUILD PASSED** (bundle) | `wrangler deploy --dry-run`; runtime **NOT VERIFIED** |
 | Signaling Docker image / TURN compose | **NOT VERIFIED** | Docker not installed on the dev PC |
 
