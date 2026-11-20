@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    uses: ./.github/workflows/build-windows.yml
+  android:
+    uses: ./.github/workflows/build-android.yml
+    secrets: inherit
+  ios:
+    uses: ./.github/workflows/build-ios.yml
+    secrets: inherit
+
+  publish:
+    needs: [windows, android, ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # only this job may create the release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Collect artifacts and checksums
+        run: |
+          mkdir out
+          find dist -type f \( -name '*.zip' -o -name '*.apk' -o -name '*.ipa' \) -exec cp {} out/ \;
+          cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Release notes
+        run: |
+          {
+            echo "## RemotePC AI ${GITHUB_REF_NAME}"
+            echo
+            echo "Artifacts were built and their automated checks passed in this workflow."
+            echo "Device-level verification status is tracked in TEST_REPORT.md — this is a **pre-release** until it is complete."
+            echo
+            echo "- iOS IPA is **unsigned**: sign it with your own tool (re-sign the embedded frameworks too)."
+            echo "- Verify downloads with SHA256SUMS.txt."
+            echo
+            sed -n '/^## /,$p' CHANGELOG.md | head -60
+          } > notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          body_path: notes.md
+          prerelease: true

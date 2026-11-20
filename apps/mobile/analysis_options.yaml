@@ -1,0 +1,14 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    # Flutter 3.47+ deprecates package:flutter/material.dart in favour of package:material_ui, but plugins
+    # (flutter_markdown_plus, mobile_scanner, …) still use the framework types. Migrate when they do.
+    deprecated_member_use: info
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+linter:
+  rules:
+    prefer_single_quotes: true

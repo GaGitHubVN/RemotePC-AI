@@ -1,0 +1,140 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      IOS_P12_BASE64: { required: false }
+      IOS_P12_PASSWORD: { required: false }
+      IOS_PROFILE_BASE64: { required: false }
+      IOS_TEAM_ID: { required: false }
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  unsigned:
+    # Pinned image; never rely on macos-latest carrying the Xcode/SDK we need.
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode >= 26 (iOS 26 SDK for Liquid Glass)
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          XCODE=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sed -E 's/.*Xcode_([0-9.]+)\.app/\1 &/' | sort -V | tail -1 | cut -d' ' -f2)
+          MAJOR=$(echo "$XCODE" | sed -E 's/.*Xcode_([0-9]+).*/\1/')
+          if [ -z "$XCODE" ] || [ "$MAJOR" -lt 26 ]; then
+            echo "::error::No Xcode >= 26 on this runner image (found: $XCODE). The iOS 26 SDK is required for the Liquid Glass APIs."
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.50.1
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter test
+
+      - name: Build iOS device app without code signing
+        run: flutter build ios --release --no-codesign
+
+      - name: Validate the device binary (not a simulator build)
+        run: |
+          APP=build/ios/iphoneos/Runner.app
+          test -d "$APP"
+          echo "--- architectures"; lipo -info "$APP/Runner"
+          lipo -info "$APP/Runner" | grep -q arm64
+          echo "--- platform / deployment target"
+          otool -l "$APP/Runner" | grep -A4 LC_BUILD_VERSION | tee build_version.txt
+          grep -q "platform 2" build_version.txt     # 2 = iOS (7 would be iOS Simulator)
+          grep -q "minos 18.0" build_version.txt
+          echo "--- Info.plist"
+          plutil -p "$APP/Info.plist" | grep -E "CFBundleIdentifier|MinimumOSVersion|CFBundleShortVersionString|CFBundleExecutable|UsageDescription"
+          echo "--- embedded frameworks (must be re-signed by the external signing tool)"
+          ls -1 "$APP/Frameworks" || true
+          for f in "$APP"/Frameworks/*.framework; do lipo -info "$f/$(basename "$f" .framework)" || true; done
+          echo "--- entitlements requested by the app: none beyond defaults (no push, no app groups)"
+
+      - name: Package unsigned IPA (Payload/Runner.app)
+        run: |
+          mkdir -p ../../releases/ios/Payload
+          cp -R build/ios/iphoneos/Runner.app ../../releases/ios/Payload/
+          cd ../../releases/ios
+          zip -qry RemotePC-AI-iOS-unsigned.ipa Payload
+          rm -rf Payload
+          shasum -a 256 RemotePC-AI-iOS-unsigned.ipa > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RemotePC-AI-iOS-unsigned
+          path: releases/ios/*
+          if-no-files-found: error
+
+  signed:
+    # Optional: only runs when signing secrets are configured in the repository.
+    runs-on: macos-26
+    needs: unsigned
+    env:
+      HAS_SIGNING: ${{ secrets.IOS_P12_BASE64 != '' && secrets.IOS_PROFILE_BASE64 != '' }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+        if: env.HAS_SIGNING == 'true'
+      - name: Import certificate and profile
+        if: env.HAS_SIGNING == 'true'
+        env:
+          P12: ${{ secrets.IOS_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_P12_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_PROFILE_BASE64 }}
+        run: |
+          KC=$RUNNER_TEMP/build.keychain-db
+          security create-keychain -p "$RUNNER_TEMP" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$RUNNER_TEMP" "$KC"
+          echo "$P12" | base64 -d > $RUNNER_TEMP/cert.p12
+          security import $RUNNER_TEMP/cert.p12 -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KC"
+          security list-keychain -d user -s "$KC"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROFILE" | base64 -d > ~/Library/MobileDevice/Provisioning\ Profiles/remotepc.mobileprovision
+      - uses: subosito/flutter-action@v2
+        if: env.HAS_SIGNING == 'true'
+        with:
+          flutter-version: 3.50.1
+          channel: stable
+      - name: Build signed IPA
+        if: env.HAS_SIGNING == 'true'
+        env:
+          TEAM: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          cat > $RUNNER_TEMP/export.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>ad-hoc</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>manual</string>
+          </dict></plist>
+          EOF
+          flutter build ipa --release --export-options-plist=$RUNNER_TEMP/export.plist
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_SIGNING == 'true'
+        with:
+          name: RemotePC-AI-iOS-signed
+          path: apps/mobile/build/ios/ipa/*.ipa
+      - name: Signing not configured
+        if: env.HAS_SIGNING != 'true'
+        run: echo "Signing secrets not set; only the unsigned IPA was produced (by design)."

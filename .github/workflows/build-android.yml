@@ -1,0 +1,64 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      ANDROID_KEYSTORE_BASE64: { required: false }
+      ANDROID_KEYSTORE_PASSWORD: { required: false }
+      ANDROID_KEY_ALIAS: { required: false }
+      ANDROID_KEY_PASSWORD: { required: false }
+  push:
+    branches: [main]
+    paths: ['apps/mobile/**', '.github/workflows/build-android.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.50.1
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test
+      - name: Release keystore from GitHub Secrets (optional)
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        if: env.KS != ''
+        run: |
+          echo "$KS" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+      - name: Build release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: flutter build apk --release
+      - name: Verify APK (minSdk, ABIs, permissions, signature)
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          AAPT=$(ls $ANDROID_HOME/build-tools/*/aapt2 | tail -1)
+          $AAPT dump badging $APK | grep -E "package:|sdkVersion|native-code|uses-permission"
+          $AAPT dump badging $APK | grep -q "sdkVersion:'28'"
+          $(ls $ANDROID_HOME/build-tools/*/apksigner | tail -1) verify --print-certs $APK
+          mkdir -p ../../releases/android
+          cp $APK ../../releases/android/RemotePC-AI-Android-release.apk
+          cd ../../releases/android && sha256sum RemotePC-AI-Android-release.apk > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RemotePC-AI-Android
+          path: releases/android/*
+          if-no-files-found: error

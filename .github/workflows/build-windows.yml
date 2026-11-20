@@ -1,0 +1,39 @@
+name: Build Windows Host
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [main]
+    paths: ['apps/windows-host/**', 'packages/protocol/**', '.github/workflows/build-windows.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+        working-directory: backend/signaling
+      - name: Build solution (warnings are errors)
+        run: dotnet build apps/windows-host/RemotePC.slnx -c Release
+      - name: Core tests
+        run: dotnet test apps/windows-host/tests/RemotePC.Core.Tests -c Release --no-build --filter "Category!=LocalAI"
+      - name: Package portable (publish + isolated smoke test + zip + SHA-256)
+        shell: pwsh
+        run: ./scripts/release/package-windows.ps1 -SkipTests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RemotePC-AI-Windows-x64-Portable
+          path: |
+            releases/windows/RemotePC-AI-Windows-x64-Portable.zip
+            releases/windows/SHA256SUMS.txt
+          if-no-files-found: error

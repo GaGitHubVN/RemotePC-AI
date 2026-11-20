@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext is permitted because the PC's LAN endpoint is ws://<private-ip>:45822 (no certificate exists for a LAN IP).
+  Everything sent over it is end-to-end encrypted and authenticated (ADR-0004), and the app itself refuses
+  non-wss:// URLs for public hosts (SignalingConnection). Android cannot scope this setting to IP ranges.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>

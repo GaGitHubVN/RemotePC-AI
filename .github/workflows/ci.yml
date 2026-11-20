@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signaling:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/signaling
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/signaling/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Dependency vulnerabilities (production deps)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Cloudflare Worker bundles
+        run: npx wrangler deploy --dry-run --outdir .wrangler/dry
+
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+        working-directory: backend/signaling
+      - name: Core tests (crypto vectors, pairing, sessions over real WebRTC, files, agent)
+        run: dotnet test apps/windows-host/tests/RemotePC.Core.Tests --filter "Category!=LocalAI" --logger "trx;LogFileName=core.trx"
+      - name: Vulnerable NuGet packages
+        run: |
+          dotnet list apps/windows-host/src/RemotePC.Core/RemotePC.Core.csproj package --vulnerable --include-transitive | tee vuln.txt
+          ! grep -q "has the following vulnerable packages" vuln.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-test-results
+          path: "**/TestResults/*.trx"
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.50.1
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
