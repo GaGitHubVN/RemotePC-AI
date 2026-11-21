@@ -138,6 +138,38 @@ public sealed class SessionE2ETests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Concurrent_Session_Open_From_One_Device_Leaves_One_Session()
+    {
+        // Slow host: the phone re-sends session.open while the first is still being handled.
+        var gate = new TaskCompletionSource();
+        var calls = 0;
+        _mgr.IceServerProvider = async _ =>
+        {
+            if (Interlocked.Increment(ref calls) == 1) await gate.Task;
+            return [];
+        };
+        var a = _phone.SendAsync("session.open", "", new JsonObject { ["reqId"] = "first" });
+        await Task.Delay(100);
+        var b = _phone.SendAsync("session.open", "", new JsonObject { ["reqId"] = "second" });
+        await Task.Delay(200);
+        gate.SetResult();
+        await Task.WhenAll(a, b);
+        for (var i = 0; i < 40 && _phone.Inbox.Count(m => m.Typ == "session.accept") < 2; i++) await Task.Delay(50);
+        Assert.Single(_mgr.Sessions);
+        await Task.Delay(200);
+        int opened, closed;
+        lock (_log)
+        {
+            opened = _log.Count(l => l.StartsWith("session: opened", StringComparison.Ordinal));
+            closed = _log.Count(l => l.StartsWith("session: closed", StringComparison.Ordinal));
+        }
+        Assert.Equal(1, opened - closed); // no orphaned second session left negotiating
+        var accepted = _phone.Inbox.Where(m => m.Typ == "session.accept").Select(m => (string?)m.Payload["sid"]).ToList();
+        Assert.Equal(2, accepted.Count);
+        Assert.Equal(_mgr.Sessions.Single().Id, accepted[^1]); // the latest request owns the live session
+    }
+
+    [Fact]
     public async Task Reopening_From_Same_Device_Replaces_Session_And_Resume_Keeps_Sid()
     {
         var first = await _phone.OpenSessionAsync();

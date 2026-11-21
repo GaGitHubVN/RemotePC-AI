@@ -17,7 +17,7 @@ public sealed record ResumeTicket(string Sid, string Token, string DeviceId, Dat
 /// Session lifecycle (PROTOCOL.md §5): session.open / webrtc.offer / webrtc.ice / session.close.
 /// Guarantees at most one session per device and enforces the concurrent-session limit.
 /// </summary>
-public sealed class SessionManager
+public sealed class SessionManager : IDisposable
 {
     private readonly PeerRouter _router;
     private readonly ConcurrentDictionary<string, HostSession> _byDevice = new(StringComparer.Ordinal);
@@ -107,7 +107,22 @@ public sealed class SessionManager
     private bool TryGetSession(InboundMessage msg, out HostSession session) =>
         _byDevice.TryGetValue(msg.From, out session!) && session.Id == msg.Sid && session.State != SessionState.Closed;
 
+    /// <summary>
+    /// session.open is handled one at a time. Without this, a phone that re-sent session.open while the first was still
+    /// in flight (slow host) got two live sessions for one device, and its offer landed on the wrong one.
+    /// </summary>
+    private readonly SemaphoreSlim _openGate = new(1, 1);
+
+    public void Dispose() => _openGate.Dispose();
+
     private async Task OpenAsync(InboundMessage msg)
+    {
+        await _openGate.WaitAsync().ConfigureAwait(false);
+        try { await OpenCoreAsync(msg).ConfigureAwait(false); }
+        finally { _openGate.Release(); }
+    }
+
+    private async Task OpenCoreAsync(InboundMessage msg)
     {
         var reqId = (string?)msg.Payload["reqId"] ?? "";
         var device = msg.Device!;

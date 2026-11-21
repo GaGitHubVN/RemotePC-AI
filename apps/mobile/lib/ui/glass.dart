@@ -47,16 +47,15 @@ class _GlassViewState extends State<_GlassView> {
     // only while its route is current and settled; otherwise a Flutter-drawn look-alike takes its place.
     // Every enclosing route counts: the button may sit in a tab navigator while the remote screen is pushed on the
     // root navigator above the whole shell.
+    // Walk outwards: route → its navigator → the route that hosts that navigator → … (findAncestorStateOfType skips
+    // the element itself; Navigator.maybeOf would return the same navigator again and loop forever).
     final routes = <ModalRoute<dynamic>>[];
     BuildContext? ctx = context;
-    while (ctx != null) {
+    for (var depth = 0; ctx != null && depth < 8; depth++) {
       final r = ModalRoute.of(ctx);
-      if (r == null) break;
+      if (r == null || routes.contains(r)) break;
       routes.add(r);
-      final nav = Navigator.maybeOf(ctx);
-      if (nav == null) break;
-      final outer = nav.context;
-      ctx = Navigator.maybeOf(outer) == null ? null : outer;
+      ctx = ctx.findAncestorStateOfType<NavigatorState>()?.context;
     }
     final anims = <Listenable>[
       for (final r in routes) ...[if (r.animation != null) r.animation!, if (r.secondaryAnimation != null) r.secondaryAnimation!],
