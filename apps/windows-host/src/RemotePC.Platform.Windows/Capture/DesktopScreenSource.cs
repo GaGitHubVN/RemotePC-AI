@@ -76,6 +76,9 @@ public sealed class DesktopScreenSource(Action<string>? log = null) : IScreenSou
             var dirty = false;
             var fpsWindowStart = clock.Elapsed;
             var fpsCount = 0;
+            // 1 ms scheduler resolution for this pipeline (the default 15.6 ms makes every Sleep(1)/wait in the
+            // capture + async encoder loop cost a whole tick). Released in finally.
+            _ = TimeBeginPeriod(1);
             try
             {
                 while (_running)
@@ -149,10 +152,14 @@ public sealed class DesktopScreenSource(Action<string>? log = null) : IScreenSou
             }
             finally
             {
+                _ = TimeEndPeriod(1);
                 enc?.Dispose();
                 dup?.Dispose();
             }
         }
+
+        [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeBeginPeriod")] private static extern uint TimeBeginPeriod(uint ms);
+        [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeEndPeriod")] private static extern uint TimeEndPeriod(uint ms);
 
         private static double Ms(long start) => (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency;
         private static double Ema(double prev, double v) => prev == 0 ? v : (prev * 0.9) + (v * 0.1);

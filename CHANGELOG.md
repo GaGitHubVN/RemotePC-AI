@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.0 — 2026-11-21 (pre-release)
+
+First report from a real iPhone (iOS 26, user): pairing + connection + video + mouse worked; ~10 fps max, unstable
+latency, wrong-looking app icon.
+
+### Fixed
+- Unstable latency: RTP timestamps were a fixed 1/fps step while the desktop only produces frames when it changes,
+  so the phone's jitter buffer saw "late" frames and kept growing/shrinking. Timestamps now follow the real capture
+  clock (unit-tested).
+- Latency spikes every 4 s: a full IDR every 4 s burst over Wi-Fi. Periodic IDR is now every 60 s; the phone's
+  PLI/FIR still forces one immediately when needed.
+- Frame rate: 1 ms timer resolution on the capture thread (Sleep(1) cost 15.6 ms in the async encoder wait) and
+  BGRA→NV12 conversion split across cores (8.8 → 4.1 ms at 1080p). Measured on the dev PC with a changing desktop
+  (`StreamBenchmark`, REMOTEPC_BENCH=1): 1080p 27.7 → 29.8 fps (target 30); 720p "Low latency" 37–40 fps (target 60).
+- Connect timeout counted from session.open; a slow phone that sent its offer after 43 s was dropped. Each
+  negotiation step now gets its own 45 s window.
+- E2E test host: a failed screenshot no longer kills its HTTP loop (Android CI hang).
+
+### Added
+- Cloud AI next to local AI: Claude (official Anthropic C# SDK), OpenAI, Google Gemini, OpenRouter, Groq, DeepSeek,
+  or any OpenAI-compatible HTTPS endpoint. Added from the phone (AI tab → model → "Add cloud AI") or by the PC owner.
+  API keys are DPAPI-encrypted on the PC, never stored on the phone, never returned over the API (only "…last4").
+  The UI labels cloud vs on-PC sources and warns that content leaves the PC.
+- App icon redesigned. iOS 26: Icon Composer `AppIcon.icon` (layered, Liquid Glass, dark/clear/tinted rendered by
+  the system). iOS 18–25: full-bleed 1024 icon with Any/Dark/Tinted appearances (the old pre-rounded PNG produced
+  doubled corners). Android: adaptive icon with monochrome layer (themed icons). Windows: new .ico.
+  Generated from one geometry by `tools/icons/generate_icons.py`.
+
 ## 0.2.0 — 2026-11-20 (pre-release; verified on iOS 18/26 simulators and Android 14 emulator, not on phones)
 
 ### Fixed

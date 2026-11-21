@@ -96,7 +96,7 @@ class SettingsScreen extends StatelessWidget {
               Tile(title: tr('security'), icon: Ic.shield, iconColor: const Color(0xFF34C759), onTap: () => pushPage(context, const SecurityScreen())),
             ]),
             Section(header: tr('about'), footer: tr('about_text'), children: [
-              Tile(title: tr('version'), value: '0.2.0', chevron: false),
+              Tile(title: tr('version'), value: '0.3.0', chevron: false),
               Tile(title: tr('ui_style'), value: uiStyleLabel(), chevron: false),
             ]),
           ]),

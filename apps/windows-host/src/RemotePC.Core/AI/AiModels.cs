@@ -10,7 +10,11 @@ public sealed record AiModel(
 
 public sealed record AiProviderStatus(
     string Id, string Kind, string Name, string Endpoint, bool Running, string? Version, string? Error,
-    bool SupportsStreaming, bool SupportsTools, IReadOnlyList<string> SupportedOptions);
+    bool SupportsStreaming, bool SupportsTools, IReadOnlyList<string> SupportedOptions)
+{
+    /// <summary>True for cloud APIs: prompts (and, for the agent, screenshots/file text) leave this PC.</summary>
+    public bool Remote { get; init; }
+}
 
 public sealed record ToolCall(string Id, string Name, JsonObject Arguments);
 
@@ -21,6 +25,8 @@ public sealed record ChatMessage(string Role, string Content)
     public IReadOnlyList<ToolCall>? ToolCalls { get; init; }
     public string? ToolCallId { get; init; }
     public string? ToolName { get; init; }
+    /// <summary>Provider-specific copy of an assistant turn (e.g. Claude thinking blocks) replayed unchanged. Never serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore] public object? ProviderState { get; init; }
 }
 
 public sealed record ToolDefinition(string Name, string Description, JsonObject Parameters);
@@ -42,7 +48,11 @@ public sealed record ChatRequest(string Model, IReadOnlyList<ChatMessage> Messag
 public sealed record ChatUsage(int? PromptTokens, int? CompletionTokens, double? TokensPerSecond, double? FirstTokenMs, double TotalMs);
 
 /// <summary>One streamed piece of a response.</summary>
-public sealed record ChatChunk(string? Delta = null, string? ThinkingDelta = null, IReadOnlyList<ToolCall>? ToolCalls = null, bool Done = false, ChatUsage? Usage = null, string? FinishReason = null);
+public sealed record ChatChunk(string? Delta = null, string? ThinkingDelta = null, IReadOnlyList<ToolCall>? ToolCalls = null, bool Done = false, ChatUsage? Usage = null, string? FinishReason = null)
+{
+    /// <summary>On the final chunk: what the caller should store in <see cref="ChatMessage.ProviderState"/>.</summary>
+    public object? ProviderState { get; init; }
+}
 
 public interface IAiProvider
 {

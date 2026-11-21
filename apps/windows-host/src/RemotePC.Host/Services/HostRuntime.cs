@@ -84,7 +84,7 @@ public sealed class HostRuntime : IAsyncDisposable
         Sessions.SessionCreated += Files.Attach;
         Sessions.SessionClosed += s => { Files.AbortDevice(s.DeviceId); Agent!.CancelAll(s.DeviceId); };
 
-        Ai = new AiService(_http, Config.Ai) { Persist = ai => UpdateConfig(c => c with { Ai = ai }) };
+        Ai = new AiService(_http, Config.Ai) { Persist = ai => UpdateConfig(c => c with { Ai = ai }), Secrets = protector };
         Ai.Changed += () => StateChanged?.Invoke();
         Ai.RegisterRpc(Sessions.Rpc);
 

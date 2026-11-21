@@ -185,7 +185,7 @@ public sealed class MfH264Encoder : IVideoEncoder
         if (_codec is null) return;
         SetCodec(MfGuids.CodecApi_RateControlMode, 0u); // CBR
         SetCodec(MfGuids.CodecApi_MeanBitRate, (uint)(kbps * 1000));
-        SetCodec(MfGuids.CodecApi_GopSize, (uint)(_fps * 4)); // periodic IDR; PLI/FIR also force one
+        SetCodec(MfGuids.CodecApi_GopSize, (uint)(_fps * 60)); // rare periodic IDR (big Wi-Fi bursts = latency spikes); PLI/FIR force one when the phone needs it
         SetCodec(MfGuids.CodecApi_BPictureCount, 0u);
         SetCodec(MfGuids.CodecApi_LowLatencyMode, true);
         SetCodec(MfGuids.CodecApi_QualityVsSpeed, 33u); // favour speed

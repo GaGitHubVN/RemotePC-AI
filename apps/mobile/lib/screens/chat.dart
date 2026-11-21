@@ -17,6 +17,7 @@ import '../ui/glass.dart';
 import '../ui/platform_ui.dart';
 import '../ui/theme.dart';
 import 'agent.dart';
+import 'cloud_ai.dart';
 import 'home.dart';
 
 /// Conversations across all PCs, stored locally on the phone.
@@ -203,11 +204,18 @@ class _ChatScreenState extends State<ChatScreen> {
         Section(header: tr('providers'), children: [
           for (final pr in providers)
             Tile(
-              title: pr['name'],
-              subtitle: pr['running'] == true ? 'v${pr['version'] ?? '?'} · ${pr['endpoint']}' : '${pr['error']}',
+              title: '${pr['name']} · ${pr['remote'] == true ? tr('cloud_badge') : tr('local_badge')}',
+              subtitle: pr['running'] == true ? (pr['remote'] == true ? '${pr['endpoint']}' : 'v${pr['version'] ?? '?'} · ${pr['endpoint']}') : '${pr['error']}',
               leading: Icon(Icons.circle, size: 10, color: pr['running'] == true ? p.success : p.secondary),
               chevron: false,
             ),
+          Tile(
+            title: tr('add_cloud_ai'),
+            subtitle: 'Claude · OpenAI · Gemini · OpenRouter · Groq · DeepSeek',
+            icon: Ic.cloud,
+            iconColor: const Color(0xFF5E5CE6),
+            onTap: () => Navigator.of(c).pop(const {'__cloud': true}),
+          ),
         ]),
         Section(header: tr('models'), footer: models.isEmpty ? tr('no_models') : null, children: [
           for (final m in models)
@@ -229,6 +237,15 @@ class _ChatScreenState extends State<ChatScreen> {
       ];
     });
     if (picked == null) return;
+    if (picked['__cloud'] == true) {
+      if (!mounted) return;
+      final r = await pushPage<Map<String, dynamic>>(context, CloudAiScreen(link: link));
+      if (r != null && mounted) {
+        setState(() => _status = r);
+        await _pickModel();
+      }
+      return;
+    }
     try {
       final s = await link.call('ai.select', {'provider': picked['providerId'], 'model': picked['id']});
       setState(() => _status = s);

@@ -67,6 +67,9 @@ class Ic {
   static const compose = AIcon(Icons.edit_square, CupertinoIcons.square_pencil, 'square.and.pencil');
   static const verified = AIcon(Icons.verified, CupertinoIcons.checkmark_seal_fill, 'checkmark.seal.fill');
   static const lock = AIcon(Icons.lock_outline, CupertinoIcons.lock, 'lock');
+  static const cloud = AIcon(Icons.cloud_outlined, CupertinoIcons.cloud, 'cloud');
+  static const key = AIcon(Icons.key_outlined, CupertinoIcons.lock_rotation, 'key');
+  static const link = AIcon(Icons.link, CupertinoIcons.link, 'link');
 }
 
 /// Semantic colours per design language.
@@ -414,8 +417,11 @@ class AdaptiveTextField extends StatelessWidget {
   final TextInputAction? action;
   final TextCapitalization capitalization;
   final FocusNode? focusNode;
+  final bool obscure;
+  final TextInputType? keyboard;
   const AdaptiveTextField({super.key, this.controller, this.placeholder, this.prefix, this.minLines = 1, this.maxLines = 1, this.onChanged, this.onSubmitted,
-      this.suffix, this.autofocus = false, this.dense = false, this.action, this.capitalization = TextCapitalization.none, this.focusNode});
+      this.suffix, this.autofocus = false, this.dense = false, this.action, this.capitalization = TextCapitalization.none, this.focusNode,
+      this.obscure = false, this.keyboard});
 
   @override
   Widget build(BuildContext context) {
@@ -429,6 +435,10 @@ class AdaptiveTextField extends StatelessWidget {
         autofocus: autofocus,
         textInputAction: action,
         textCapitalization: capitalization,
+        obscureText: obscure,
+        autocorrect: !obscure,
+        enableSuggestions: !obscure,
+        keyboardType: keyboard,
         onChanged: onChanged,
         onSubmitted: onSubmitted,
         padding: EdgeInsets.symmetric(horizontal: 12, vertical: dense ? 8 : 11),
@@ -448,6 +458,10 @@ class AdaptiveTextField extends StatelessWidget {
       autofocus: autofocus,
       textInputAction: action,
       textCapitalization: capitalization,
+      obscureText: obscure,
+      autocorrect: !obscure,
+      enableSuggestions: !obscure,
+      keyboardType: keyboard,
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       decoration: InputDecoration(hintText: placeholder, isDense: dense, prefixIcon: prefix == null ? null : Icon(prefix!.material), suffixIcon: suffix),

@@ -149,7 +149,23 @@ public sealed class HostSession : IAsyncDisposable
     private void SendFrame(EncodedFrame f)
     {
         if (State != SessionState.Connected || !Has(Permission.ViewScreen)) return;
-        _pc.SendVideo(90000 / _fps, f.Data);
+        _pc.SendVideo(RtpDuration(ref _lastCaptureTicks, f.CaptureTicks, _fps), f.Data);
+    }
+
+    private long _lastCaptureTicks;
+
+    /// <summary>
+    /// RTP timestamp increment (90 kHz) from the real capture interval. The desktop only produces frames when it
+    /// changes, so a fixed 1/fps step would tell the phone's jitter buffer that frames arrive late, making it grow
+    /// and swing (unstable latency). Clamped to [1 ms, 1 s].
+    /// </summary>
+    internal static uint RtpDuration(ref long lastCaptureTicks, long captureTicks, uint fallbackFps)
+    {
+        var last = lastCaptureTicks;
+        lastCaptureTicks = captureTicks;
+        if (last == 0 || captureTicks <= last) return 90000 / Math.Max(1u, fallbackFps);
+        var units = (captureTicks - last) * 90000.0 / System.Diagnostics.Stopwatch.Frequency;
+        return (uint)Math.Clamp(units, 90, 90000);
     }
 
     private void OnReceiveReport(System.Net.IPEndPoint ep, SDPMediaTypesEnum media, RTCPCompoundPacket p)

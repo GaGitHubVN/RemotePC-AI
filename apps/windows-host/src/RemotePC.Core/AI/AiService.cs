@@ -13,10 +13,31 @@ public sealed record AiConfig
     public ChatOptions Options { get; init; } = new();
     /// <summary>Extra OpenAI-compatible endpoints added by the PC owner (never auto-discovered off-host).</summary>
     public List<CustomEndpoint> CustomEndpoints { get; init; } = [];
+    /// <summary>Cloud AI accounts added by the PC owner or a paired phone. Keys are DPAPI-protected and never sent out.</summary>
+    public List<CloudEndpoint> CloudEndpoints { get; init; } = [];
     public int MaxConcurrentInferences { get; init; } = 1;
 }
 
 public sealed record CustomEndpoint(string Id, string Name, string Url);
+
+/// <param name="Kind">"openai" (OpenAI-compatible chat completions) or "anthropic" (Claude Messages API).</param>
+/// <param name="ProtectedKey">Base64 of the DPAPI-protected API key.</param>
+/// <param name="KeyHint">Last 4 characters, for display only.</param>
+public sealed record CloudEndpoint(string Id, string Name, string Kind, string BaseUrl, string ProtectedKey, string KeyHint);
+
+/// <summary>Well-known cloud AI services. Custom OpenAI-compatible URLs are allowed too (HTTPS only).</summary>
+public sealed record CloudPreset(string Id, string Name, string Kind, string BaseUrl, string KeyUrl)
+{
+    public static readonly IReadOnlyList<CloudPreset> All =
+    [
+        new("anthropic", "Claude (Anthropic)", "anthropic", "https://api.anthropic.com/", "https://platform.claude.com/settings/keys"),
+        new("openai", "OpenAI", "openai", "https://api.openai.com/v1/", "https://platform.openai.com/api-keys"),
+        new("gemini", "Google Gemini", "openai", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://aistudio.google.com/apikey"),
+        new("openrouter", "OpenRouter", "openai", "https://openrouter.ai/api/v1/", "https://openrouter.ai/keys"),
+        new("groq", "Groq", "openai", "https://api.groq.com/openai/v1/", "https://console.groq.com/keys"),
+        new("deepseek", "DeepSeek", "openai", "https://api.deepseek.com/v1/", "https://platform.deepseek.com/api_keys"),
+    ];
+}
 
 /// <summary>Discovers local AI runtimes, tracks the selected model and runs (rate-limited) inference.</summary>
 public sealed class AiService : IDisposable
@@ -31,6 +52,9 @@ public sealed class AiService : IDisposable
 
     public event Action? Changed;
     public Action<AiConfig>? Persist { get; set; }
+    /// <summary>Protects cloud API keys at rest (DPAPI on Windows). Without it cloud accounts cannot be added.</summary>
+    public ISecretProtector? Secrets { get; set; }
+    private const string KeyPurpose = "RemotePC.ai.cloud-key";
 
     public AiService(HttpClient http, AiConfig config)
     {
@@ -71,6 +95,14 @@ public sealed class AiService : IDisposable
         {
             if (Uri.TryCreate(c.Url, UriKind.Absolute, out var u) && u.Scheme is "http" or "https")
                 list.Add(new OpenAiCompatibleProvider(_http, u, c.Id, c.Name));
+        }
+        foreach (var c in Config.CloudEndpoints)
+        {
+            var key = UnprotectKey(c);
+            if (key is null || !Uri.TryCreate(c.BaseUrl, UriKind.Absolute, out var u) || u.Scheme != "https") continue;
+            list.Add(c.Kind == "anthropic"
+                ? new AnthropicProvider(c.Id, c.Name, key, u.Host == "api.anthropic.com" ? null : u)
+                : new OpenAiCompatibleProvider(_http, u, c.Id, c.Name, key, remote: true));
         }
         var statuses = await Task.WhenAll(list.Select(p => p.ProbeAsync(ct))).ConfigureAwait(false);
         lock (_lock)
@@ -146,6 +178,60 @@ public sealed class AiService : IDisposable
         Changed?.Invoke();
     }
 
+    private string? UnprotectKey(CloudEndpoint c)
+    {
+        if (Secrets is null) return null;
+        try { return System.Text.Encoding.UTF8.GetString(Secrets.Unprotect(Convert.FromBase64String(c.ProtectedKey), KeyPurpose)); }
+        catch (Exception e) when (e is FormatException or System.Security.Cryptography.CryptographicException or InvalidOperationException) { return null; }
+    }
+
+    /// <summary>Adds (or replaces) a cloud AI account. The key is encrypted immediately and never returned.</summary>
+    public CloudEndpoint AddCloud(string presetId, string apiKey, string? customUrl = null, string? customName = null)
+    {
+        if (Secrets is null) throw new InvalidOperationException("secret storage unavailable");
+        apiKey = apiKey.Trim();
+        if (apiKey.Length is < 8 or > 400 || apiKey.Any(char.IsWhiteSpace)) throw new ArgumentException("That does not look like an API key.");
+        CloudPreset preset;
+        if (presetId == "custom")
+        {
+            if (!Uri.TryCreate(customUrl?.Trim(), UriKind.Absolute, out var u) || u.Scheme != "https")
+                throw new ArgumentException("A custom endpoint must be an https:// URL (OpenAI-compatible).");
+            preset = new CloudPreset("custom-" + u.Host.Replace('.', '-'), string.IsNullOrWhiteSpace(customName) ? u.Host : customName.Trim(), "openai", u.ToString(), "");
+        }
+        else preset = CloudPreset.All.FirstOrDefault(p => p.Id == presetId) ?? throw new ArgumentException("unknown cloud service");
+        var ep = new CloudEndpoint("cloud-" + preset.Id, preset.Name, preset.Kind, preset.BaseUrl,
+            Convert.ToBase64String(Secrets.Protect(System.Text.Encoding.UTF8.GetBytes(apiKey), KeyPurpose)), apiKey[^4..]);
+        UpdateConfig(c => c with { CloudEndpoints = [.. c.CloudEndpoints.Where(x => x.Id != ep.Id), ep] });
+        return ep;
+    }
+
+    public void RemoveCloud(string id)
+    {
+        UpdateConfig(c => c with
+        {
+            CloudEndpoints = [.. c.CloudEndpoints.Where(x => x.Id != id)],
+            ProviderId = c.ProviderId == id ? null : c.ProviderId,
+            ModelId = c.ProviderId == id ? null : c.ModelId,
+        });
+        lock (_lock)
+        {
+            _providers.RemoveAll(p => p.Id == id);
+            _status.Remove(id);
+            _models.Remove(id);
+        }
+        Changed?.Invoke();
+    }
+
+    public JsonArray CloudJson() => new([.. Config.CloudEndpoints.Select(c => (JsonNode)new JsonObject
+    {
+        ["id"] = c.Id, ["name"] = c.Name, ["kind"] = c.Kind, ["baseUrl"] = c.BaseUrl, ["keyHint"] = "…" + c.KeyHint,
+    })]);
+
+    public static JsonArray PresetsJson() => new([.. CloudPreset.All.Select(p => (JsonNode)new JsonObject
+    {
+        ["id"] = p.Id, ["name"] = p.Name, ["kind"] = p.Kind, ["keyUrl"] = p.KeyUrl,
+    })]);
+
     /// <summary>Runs a chat on the selected model. Waits for a free inference slot (resource limit).</summary>
     public async IAsyncEnumerable<ChatChunk> ChatAsync(IReadOnlyList<ChatMessage> messages, IReadOnlyList<ToolDefinition>? tools,
         ChatOptions? options, [EnumeratorCancellation] CancellationToken ct)
@@ -214,6 +300,26 @@ public sealed class AiService : IDisposable
             catch (ArgumentException e) { throw new RpcException("bad_request", e.Message); }
             return Task.FromResult<JsonNode?>(StatusJson());
         });
+        rpc.Register("ai.cloud.list", Permission.UseAi, (_, _) =>
+            Task.FromResult<JsonNode?>(new JsonObject { ["presets"] = PresetsJson(), ["accounts"] = CloudJson() }));
+        rpc.Register("ai.cloud.add", Permission.UseAi, async (p, ctx) =>
+        {
+            CloudEndpoint ep;
+            try { ep = AddCloud((string?)p?["preset"] ?? "", (string?)p?["apiKey"] ?? "", (string?)p?["url"], (string?)p?["name"]); }
+            catch (ArgumentException e) { throw new RpcException("bad_request", e.Message); }
+            catch (InvalidOperationException e) { throw new RpcException("unavailable", e.Message); }
+            await ScanAsync(ctx.Cancellation).ConfigureAwait(false);
+            await RefreshModelsAsync(ctx.Cancellation).ConfigureAwait(false);
+            var st = Statuses.FirstOrDefault(s => s.Id == ep.Id);
+            var o = StatusJson();
+            o["added"] = new JsonObject { ["id"] = ep.Id, ["ok"] = st?.Running == true, ["error"] = st?.Error };
+            return o;
+        });
+        rpc.Register("ai.cloud.remove", Permission.UseAi, (p, _) =>
+        {
+            RemoveCloud((string?)p?["id"] ?? "");
+            return Task.FromResult<JsonNode?>(StatusJson());
+        });
         rpc.Register("ai.chat", Permission.UseAi, async (p, ctx) =>
         {
             var messages = ParseMessages(p?["messages"]);
@@ -237,7 +343,7 @@ public sealed class AiService : IDisposable
                 }
             }
             catch (AiProviderException e) { throw new RpcException("ai_error", e.Message); }
-            catch (HttpRequestException e) { throw new RpcException("ai_unavailable", "The local AI runtime is not reachable: " + e.Message); }
+            catch (HttpRequestException e) { throw new RpcException("ai_unavailable", "The AI service is not reachable: " + e.Message); }
             return new JsonObject
             {
                 ["content"] = content.ToString(),
@@ -274,6 +380,7 @@ public sealed class AiService : IDisposable
         {
             ["providers"] = JsonSerializer.SerializeToNode(Statuses, Protocol.ProtocolJson.Options),
             ["models"] = new JsonArray(CachedModels.Select(ModelJson).ToArray()),
+            ["cloud"] = CloudJson(),
             ["selected"] = sel is null ? null : new JsonObject { ["provider"] = sel.Value.Provider.Id, ["model"] = Config.ModelId, ["info"] = sel.Value.Model is null ? null : ModelJson(sel.Value.Model) },
         };
     }

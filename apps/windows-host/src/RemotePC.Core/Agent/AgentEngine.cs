@@ -218,10 +218,12 @@ public sealed class AgentEngine(AiService ai, ToolRegistry tools, Func<string, P
                 t.Running.Wait(ct); // paused?
                 var text = new StringBuilder();
                 var calls = new List<ToolCall>();
+                object? providerState = null;
                 await foreach (var c in ai.ChatAsync(messages, defs, new ChatOptions { Temperature = 0.1 }, ct).ConfigureAwait(false))
                 {
                     text.Append(c.Delta);
                     if (c.ToolCalls is not null) calls.AddRange(c.ToolCalls);
+                    if (c.ProviderState is not null) providerState = c.ProviderState;
                 }
                 if (calls.Count == 0)
                 {
@@ -231,14 +233,14 @@ public sealed class AgentEngine(AiService ai, ToolRegistry tools, Func<string, P
                     {
                         // One nudge to verify before accepting the answer.
                         SetState(t, AgentTaskState.Verifying);
-                        messages.Add(new ChatMessage("assistant", answer));
+                        messages.Add(new ChatMessage("assistant", answer) { ProviderState = providerState });
                         messages.Add(new ChatMessage("user", "[verification-request] Before finishing, use a read-only tool to confirm the change actually happened, then answer."));
                         continue;
                     }
                     Finish(t, AgentTaskState.Completed, answer.Length > 0 ? answer : "Done.", null);
                     return;
                 }
-                messages.Add(new ChatMessage("assistant", text.ToString()) { ToolCalls = calls });
+                messages.Add(new ChatMessage("assistant", text.ToString()) { ToolCalls = calls, ProviderState = providerState });
                 foreach (var call in calls.Take(5))
                 {
                     var (summary, image) = await ExecuteCallAsync(t, device, policy, call, ct).ConfigureAwait(false);

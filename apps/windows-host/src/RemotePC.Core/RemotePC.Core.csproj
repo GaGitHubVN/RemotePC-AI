@@ -5,6 +5,7 @@
     <IsTrimmable>false</IsTrimmable><AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Anthropic" Version="13.12.0" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageReference Include="SIPSorcery" Version="10.0.17" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
