@@ -1,6 +1,6 @@
 # Test report
 
-Date: 2026-11-20 · Commit: see `git log -1` · Status values as defined in the project brief.
+Date: 2026-11-22 (v0.3.0) · Commit: see `git log -1` · Status values as defined in the project brief.
 
 ## Environment
 
@@ -48,10 +48,16 @@ order, candidates queued), list rows hidden under translucent navigation bars, m
 | Artifact | Status | Evidence |
 |---|---|---|
 | `releases/windows/RemotePC-AI-Windows-x64-Portable.zip` (single 89 MB exe) | **BUILD PASSED**, smoke-tested | started from an isolated temp folder with `--smoke-test`: exit 0, DPAPI identity created, LAN endpoint up; UI rendered (screenshot reviewed) |
-| `releases/android/RemotePC-AI-Android-release.apk` (122 MB, debug-key signed) | **BUILD PASSED** | `aapt2`: minSdk 28, targetSdk 36, ABIs arm64-v8a/armeabi-v7a/x86_64, permissions listed in ANDROID_BUILD.md |
-| `releases/ios/RemotePC-AI-iOS-unsigned.ipa` (14 MB, unsigned, v0.2.0 build 2) | **BUILD PASSED** on GitHub Actions `macos-15`, Xcode 26.3, iOS SDK 26.2 (macos-26 arm64 had no capacity) | `flutter test` 8/8 on macOS; `lipo`: arm64 device binary; `LC_BUILD_VERSION`: platform 2 (iOS, not simulator), minos 18.0; Info.plist DTSDKName iphoneos26.2; bundle id `ai.remotepc.app`; contains the native Liquid Glass layer (GlassEffectContainer, glass views, native tab bar) and the crash fixes; SHA-256 `e1ba220a…26a784d`. Installed on a device: **NOT VERIFIED** (needs your signing tool + iPhone) |
+| `releases/android/RemotePC-AI-Android-release.apk` (123 MB, v0.3.0, debug-key signed) | **BUILD PASSED** (dev PC, 2026-11-22) | minSdk 28, targetSdk 36; SHA-256 `109d5d83…211af5c`; device **NOT VERIFIED** |
+| `releases/ios/RemotePC-AI-iOS-unsigned.ipa` (unsigned, v0.3.0 build 3, commit c5dc8a3) | **BUILD PASSED** on GitHub Actions `macos-15`, Xcode 26.3, iOS SDK 26.2 (run 44925165992) | arm64 device binary, minos 18.0; Assets.car contains the Icon Composer layers (`spark`, `screen`); glass-stripe fix included; SHA-256 `a40b6720…0c16e391f`. Installed on a device: by the user (0.2.0 worked on an iPhone with iOS 26, see below); 0.3.0 **NOT VERIFIED** on device |
 | Cloudflare Worker | **BUILD PASSED** (bundle) | `wrangler deploy --dry-run`; runtime **NOT VERIFIED** |
 | Signaling Docker image / TURN compose | **NOT VERIFIED** | Docker not installed on the dev PC |
+
+## Real device (reported by the user)
+
+| Device | Build | Result |
+|---|---|---|
+| iPhone, iOS 26 | 0.2.0 IPA (self-signed by the user) | pairing, WebRTC connection, video and mouse **worked**; ~10 fps max and unstable latency (fixed in 0.3.0 on the PC side, measured 30 fps at 1080p on the dev PC); two blue stripes of the Connect button over the remote screen (fixed in 0.3.0, verified on the iOS 26 simulator). 0.3.0 on device: **NOT VERIFIED** yet |
 
 ## End-to-end scenarios from the brief
 

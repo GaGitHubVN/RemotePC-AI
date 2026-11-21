@@ -17,6 +17,15 @@ latency, wrong-looking app icon.
 - Connect timeout counted from session.open; a slow phone that sent its offer after 43 s was dropped. Each
   negotiation step now gets its own 45 s window.
 - E2E test host: a failed screenshot no longer kills its HTTP loop (Android CI hang).
+- iOS 26 (reported on the iPhone): two blue stripes of the "Connect" button stayed on top of the remote screen. The
+  native Liquid Glass button is a real UIView above Flutter; it now exists only while its page is the current,
+  settled route (in every enclosing navigator) and a Flutter-drawn stand-in takes its place during transitions.
+  Verified on the iOS 26 simulator screenshot (03-remote).
+- iOS 26 remote toolbar: buttons centered, separate glass circles, scrolls instead of clipping on narrow screens.
+- Two `session.open` arriving at once from the same phone could create two sessions; they are now serialized
+  (regression test fails without the fix). The phone waits up to 25 s for `session.accept`.
+- CI: an iOS integration-test attempt that hangs (flutter tool never attaches to the app) is stopped after 20 min
+  and retried once.
 
 ### Added
 - Cloud AI next to local AI: Claude (official Anthropic C# SDK), OpenAI, Google Gemini, OpenRouter, Groq, DeepSeek,

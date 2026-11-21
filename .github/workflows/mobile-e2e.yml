@@ -112,13 +112,13 @@ jobs:
           UDID=${{ steps.sim.outputs.udid }}
           xcrun simctl spawn "$UDID" log stream --level info --style compact --predicate 'process == "Runner" AND (subsystem == "" OR eventMessage CONTAINS "RemotePC" OR eventMessage CONTAINS "flutter")' > /tmp/sim.log 2>&1 &
           # `flutter test` sometimes never attaches to the app's VM service on a busy simulator and then hangs silently
-          # until the job times out. Cap each attempt and retry once, but only after such a hang: a real test failure
+          # until the job times out. Cap each attempt (a normal run takes ~8 min) and retry once, but only after such a hang: a real test failure
           # exits on its own and fails the job right away.
           attempt() {
             flutter test integration_test/app_test.dart -d "$UDID" \
               --dart-define=PAIR_URI="$URI" --dart-define=PAIR_HTTP=http://127.0.0.1:45901/ --dart-define=EXPECT_STYLE=${{ matrix.style }} --dart-define=NATIVE_TABS=${{ matrix.tabs }} 2>&1 &
             local pid=$!
-            ( sleep 1800; echo "::warning::flutter test produced no result in 30 min, stopping it"; touch /tmp/hung
+            ( sleep 1200; echo "::warning::flutter test produced no result in 20 min, stopping it"; touch /tmp/hung
               pkill -TERM -f flutter_tools; pkill -TERM -P $pid; kill -TERM $pid ) 2>/dev/null &
             local wd=$!
             local rc=0; wait $pid || rc=$?
@@ -126,12 +126,12 @@ jobs:
             return $rc
           }
           rm -f /tmp/hung
-          if attempt; then exit 0; fi
+          if attempt && [ ! -f /tmp/hung ]; then exit 0; fi   # a stopped run can still exit 0 ("0 tests passed")
           [ -f /tmp/hung ] || exit 1
           rm -f /tmp/hung
           xcrun simctl terminate "$UDID" ai.remotepc.app 2>/dev/null || true
           echo "::warning::retrying the integration test after a hang"
-          attempt
+          attempt && [ ! -f /tmp/hung ]
 
       - name: Assert the host saw the phone's input and transfers
         if: success()
