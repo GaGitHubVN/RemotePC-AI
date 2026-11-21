@@ -27,7 +27,9 @@ jobs:
             style: glass
             tabs: 'true'
           - name: ios18
-            runner: macos-26
+            # iOS 18 simulators on the macos-26 image crawl (10 min to launch the app, WebRTC drops after 2.5 min);
+            # macos-15 ships iOS 18 runtimes natively and also has Xcode 26 for the glass code.
+            runner: macos-15
             os: '18'
             style: cupertino
             tabs: 'true'
