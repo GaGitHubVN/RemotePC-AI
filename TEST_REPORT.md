@@ -39,6 +39,11 @@ auto-approves pairing; replays a synthetic H.264 clip). Screenshots are taken na
 | iPhone 16 Pro Max, iOS 18.6 | `cupertino` — iOS 18 design | **TEST PASSED** (2 consecutive runs) | same flow; settings shows "iOS 18" |
 | Android 14 emulator (Pixel 7 AVD, x86_64, on the dev PC; `scripts/test/mobile-e2e-android.ps1`) | `material` — Material 3 | **TEST PASSED** | same flow incl. video (1280×720, direct STUN path), tap → `INPUT button left`, download/upload SHA-256 ok, light + dark screenshots. CI job: boots now, but hung on the test host's screenshot call (adb not on PATH → HTTP loop died); fixed, not re-run |
 
+**v0.3.0 re-run (run 44943330440, commit with the glass fix): iOS 26.5 PASS, iOS 18.6 PASS (now on the `macos-15`
+runner — iOS 18 simulators crawl on the macos-26 image), Android PASS.** Screenshot 03-remote on iOS 26: no glass button
+left over the video, toolbar centered. Each iOS job needed one automatic retry after the flutter tool failed to attach
+(CI flake, see CHANGELOG).
+
 Bugs found and fixed by this suite: iOS crash on Connect (`"username": null` → NSNull inside flutter_webrtc), duplicate
 `connect()` from `initState` (notify during build), ICE candidates applied before the SDP answer (envelopes now handled in
 order, candidates queued), list rows hidden under translucent navigation bars, missing Cupertino icon font.
