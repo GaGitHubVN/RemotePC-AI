@@ -312,7 +312,8 @@ class HostLink extends ChangeNotifier {
         if (host.resumeSid != null) 'resume': {'sid': host.resumeSid, 'token': host.resumeToken},
         'client': {'codecs': ['H264']},
       });
-      final acc = await waiter.future.timeout(const Duration(seconds: 15));
+      // Generous: a busy PC can take a while; re-sending session.open early only makes it replace its own work.
+      final acc = await waiter.future.timeout(const Duration(seconds: 25));
       if (acc['_typ'] == 'session.reject') {
         throw StateError(switch (acc['reason']) {
           'locked' => 'Remote access is locked on the PC.',

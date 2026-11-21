@@ -355,27 +355,34 @@ struct GlassToolbarView: View {
   @Namespace private var ns
 
   var body: some View {
-    GlassEffectContainer(spacing: 8) {
-      ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 6) {
-          ForEach(model.items) { item in
-            Button { model.onTap(item.id) } label: {
-              Image(systemName: item.symbol)
-                .font(.system(size: 17, weight: .semibold))
-                .frame(width: 44, height: 44)
-                .foregroundStyle(item.destructive ? Color.red : (item.active ? Color.white : Color.primary))
-            }
-            .accessibilityLabel(item.label)
-            .accessibilityIdentifier("glass-\(item.id)")
-            .buttonStyle(.plain)
-            .glassEffect(item.active ? .regular.tint(brand).interactive() : .regular.interactive(), in: .circle)
-            .glassEffectID(item.id, in: ns)
-          }
-        }
-        .padding(.horizontal, 10)
+    // Container spacing < item spacing: neighbours stay separate circles (no tinted blob bleeding into the next one).
+    GlassEffectContainer(spacing: 4) {
+      // Centered when the buttons fit; horizontally scrollable on narrow screens.
+      ViewThatFits(in: .horizontal) {
+        row
+        ScrollView(.horizontal, showsIndicators: false) { row }
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private var row: some View {
+    HStack(spacing: 10) {
+      ForEach(model.items) { item in
+        Button { model.onTap(item.id) } label: {
+          Image(systemName: item.symbol)
+            .font(.system(size: 17, weight: .semibold))
+            .frame(width: 44, height: 44)
+            .foregroundStyle(item.destructive ? Color.red : (item.active ? Color.white : Color.primary))
+        }
+        .accessibilityLabel(item.label)
+        .accessibilityIdentifier("glass-\(item.id)")
+        .buttonStyle(.plain)
+        .glassEffect(item.active ? .regular.tint(brand).interactive() : .regular.interactive(), in: .circle)
+        .glassEffectID(item.id, in: ns)
+      }
+    }
+    .padding(.horizontal, 10)
   }
 }
 

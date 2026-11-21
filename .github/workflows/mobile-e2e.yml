@@ -110,7 +110,7 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/shots"
           URI=$(cat /tmp/pair.txt)
           UDID=${{ steps.sim.outputs.udid }}
-          xcrun simctl spawn "$UDID" log stream --level debug --style compact --predicate 'process == "Runner"' > /tmp/sim.log 2>&1 &
+          xcrun simctl spawn "$UDID" log stream --level info --style compact --predicate 'process == "Runner" AND (subsystem == "" OR eventMessage CONTAINS "RemotePC" OR eventMessage CONTAINS "flutter")' > /tmp/sim.log 2>&1 &
           set -o pipefail
           flutter test integration_test/app_test.dart -d "$UDID" \
             --dart-define=PAIR_URI="$URI" --dart-define=PAIR_HTTP=http://127.0.0.1:45901/ --dart-define=EXPECT_STYLE=${{ matrix.style }} --dart-define=NATIVE_TABS=${{ matrix.tabs }} 2>&1

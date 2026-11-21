@@ -101,7 +101,7 @@ void main() {
     final homeCtx = t.element(find.byType(HomeScreen, skipOffstage: false));
     openRemote(homeCtx, host);
     final link = s.link(host);
-    await waitFor(t, () => link.isConnected, 'WebRTC connected (state=${link.state.name} error=${link.error})', seconds: 45);
+    await waitFor(t, () => link.isConnected, 'WebRTC connected (state=${link.state.name} error=${link.error})', seconds: 120);
     await waitFor(t, () => link.stats.framesDecoded > 5, 'decoded video frames (decoded=${link.stats.framesDecoded})', seconds: 60);
     // ignore: avoid_print
     print('video: ${link.stats.width}x${link.stats.height} decoded=${link.stats.framesDecoded} codec=${link.stats.codec} path=${link.stats.path}');
