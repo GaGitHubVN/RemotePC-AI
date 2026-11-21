@@ -41,18 +41,70 @@ class _GlassViewState extends State<_GlassView> {
   }
 
   @override
-  Widget build(BuildContext context) => UiKitView(
-        viewType: widget.viewType,
-        creationParams: _params(),
-        creationParamsCodec: const StandardMessageCodec(),
-        gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{Factory(() => EagerGestureRecognizer())},
-        onPlatformViewCreated: (id) {
-          _ch = MethodChannel('ai.remotepc/glass/$id')
-            ..setMethodCallHandler((call) async {
-              if (call.method == 'tap') widget.onTap(call.arguments as String);
-            });
-        },
-      );
+  Widget build(BuildContext context) {
+    // A UiKitView is a real UIView composited above Flutter. If it stays alive while another route covers or slides
+    // over its page, iOS keeps showing it (the "two blue stripes" over the remote screen). So the native view exists
+    // only while its route is current and settled; otherwise a Flutter-drawn look-alike takes its place.
+    // Every enclosing route counts: the button may sit in a tab navigator while the remote screen is pushed on the
+    // root navigator above the whole shell.
+    final routes = <ModalRoute<dynamic>>[];
+    BuildContext? ctx = context;
+    while (ctx != null) {
+      final r = ModalRoute.of(ctx);
+      if (r == null) break;
+      routes.add(r);
+      final nav = Navigator.maybeOf(ctx);
+      if (nav == null) break;
+      final outer = nav.context;
+      ctx = Navigator.maybeOf(outer) == null ? null : outer;
+    }
+    final anims = <Listenable>[
+      for (final r in routes) ...[if (r.animation != null) r.animation!, if (r.secondaryAnimation != null) r.secondaryAnimation!],
+    ];
+    return ListenableBuilder(
+      listenable: Listenable.merge(anims),
+      builder: (context, _) {
+        final settled = routes.every((r) =>
+            r.isCurrent && (r.animation?.isCompleted ?? true) && (r.secondaryAnimation?.isDismissed ?? true));
+        if (!settled) return _placeholder(context);
+        return UiKitView(
+          viewType: widget.viewType,
+          creationParams: _params(),
+          creationParamsCodec: const StandardMessageCodec(),
+          gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{Factory(() => EagerGestureRecognizer())},
+          onPlatformViewCreated: (id) {
+            _ch = MethodChannel('ai.remotepc/glass/$id')
+              ..setMethodCallHandler((call) async {
+                if (call.method == 'tap') widget.onTap(call.arguments as String);
+              });
+          },
+        );
+      },
+    );
+  }
+
+  /// Static stand-in shown during transitions (no platform view).
+  Widget _placeholder(BuildContext context) {
+    final dark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final a = widget.actions.isEmpty ? null : widget.actions.first;
+    final prominent = widget.viewType.endsWith('glass-button') && (a?.prominent ?? false);
+    final fill = prominent
+        ? (a!.destructive ? const Color(0xFFFF3B30) : const Color(0xFF0A84FF))
+        : (dark ? const Color(0x33FFFFFF) : const Color(0x14000000));
+    return DecoratedBox(
+      decoration: BoxDecoration(color: fill, borderRadius: BorderRadius.circular(999)),
+      child: widget.title == null
+          ? const SizedBox.expand()
+          : Center(
+              child: Text(widget.title!,
+                  style: TextStyle(
+                      color: prominent ? const Color(0xFFFFFFFF) : (dark ? const Color(0xFFFFFFFF) : const Color(0xFF000000)),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.none)),
+            ),
+    );
+  }
 }
 
 /// Floating remote-control toolbar (GlassEffectContainer of interactive glass circles).

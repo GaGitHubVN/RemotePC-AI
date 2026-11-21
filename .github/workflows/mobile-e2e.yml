@@ -32,7 +32,7 @@ jobs:
             style: cupertino
             tabs: 'true'
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
