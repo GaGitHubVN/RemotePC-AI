@@ -80,10 +80,32 @@ class RemotePcApp extends StatelessWidget {
             supportedLocales: const [Locale('vi'), Locale('en')],
             localizationsDelegates: const [GlobalMaterialLocalizations.delegate, GlobalCupertinoLocalizations.delegate, GlobalWidgetsLocalizations.delegate],
             navigatorObservers: [_tabObserver],
+            builder: (context, child) => _SaneInsets(child: child!),
             home: !s.ready ? const SplashScreen() : (!s.onboarded ? const OnboardingScreen() : const RootShell()),
           );
         },
       );
+}
+
+/// The iOS engine sometimes reports a negative keyboard inset (seen as -514 and -1664 px on the iOS 18 simulator
+/// right after leaving the full-screen remote view). Flutter then derives a huge bottom padding from it and the
+/// scaffolds build negative paddings (assertion in debug, broken layout in release). Clamp insets at the root.
+class _SaneInsets extends StatelessWidget {
+  final Widget child;
+  const _SaneInsets({required this.child});
+
+  static EdgeInsets _nonNegative(EdgeInsets e) =>
+      EdgeInsets.fromLTRB(e.left < 0 ? 0 : e.left, e.top < 0 ? 0 : e.top, e.right < 0 ? 0 : e.right, e.bottom < 0 ? 0 : e.bottom);
+
+  @override
+  Widget build(BuildContext context) {
+    final m = MediaQuery.of(context);
+    final insets = _nonNegative(m.viewInsets);
+    if (insets == m.viewInsets) return child;
+    final v = m.viewPadding;
+    final padding = _nonNegative(EdgeInsets.fromLTRB(v.left - insets.left, v.top - insets.top, v.right - insets.right, v.bottom - insets.bottom));
+    return MediaQuery(data: m.copyWith(viewInsets: insets, padding: padding), child: child);
+  }
 }
 
 class SplashScreen extends StatelessWidget {
