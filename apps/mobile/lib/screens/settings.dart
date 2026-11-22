@@ -78,6 +78,18 @@ class SettingsScreen extends StatelessWidget {
                 }),
               ),
               Tile(
+                title: tr('zero_delay'),
+                subtitle: tr('zero_delay_note'),
+                subtitleLines: 3,
+                icon: Ic.screen,
+                iconColor: const Color(0xFF30D158),
+                chevron: false,
+                trailing: AdaptiveSwitch(value: s.zeroDelay, onChanged: (v) {
+                  s.zeroDelay = v;
+                  s.savePrefs();
+                }),
+              ),
+              Tile(
                 title: tr('sensitivity'),
                 icon: Ic.pointer,
                 iconColor: const Color(0xFFFF375F),

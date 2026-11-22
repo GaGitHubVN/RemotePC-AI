@@ -19,14 +19,14 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await PlatformUi.init();
-  // Remote desktop wants the newest frame now, not a smoothed stream: show each frame as soon as it is decoded
-  // instead of holding it for the jitter-buffer target (WebRTC-ForcePlayoutDelay 0 ms). A field trial, so it must
-  // be set before the first peer connection exists.
-  try {
-    await WebRTC.initialize(options: {'zeroPlayoutDelay': true});
-  } catch (_) {}
   runApp(const RemotePcApp());
   await AppState.instance.init();
+  // Optionally show each frame as soon as it is decoded instead of holding it for the jitter-buffer target
+  // (WebRTC-ForcePlayoutDelay 0 ms). A field trial: it must be set before the first peer connection exists, and
+  // no connection is made before AppState.init has finished.
+  try {
+    await WebRTC.initialize(options: {'zeroPlayoutDelay': AppState.instance.zeroDelay});
+  } catch (_) {}
   PlatformUi.setThemeMode(AppState.instance.themeMode);
 }
 

@@ -23,6 +23,9 @@ class AppState extends ChangeNotifier {
   bool trackpadMode = true;
   double pointerSensitivity = 1.4;
   bool autoClipboard = false;
+  /// Show each video frame the moment it is decoded (WebRTC playout delay 0). Lowest latency, but on the iOS 26
+  /// simulator no frame was decoded at all with it, so iOS keeps it off by default. Read once at startup.
+  bool zeroDelay = Platform.isAndroid;
 
   Future<void> init() async {
     keys = await SecureStore.loadOrCreateKeys();
@@ -35,6 +38,7 @@ class AppState extends ChangeNotifier {
     trackpadMode = p.getBool('trackpad') ?? true;
     pointerSensitivity = p.getDouble('sensitivity') ?? 1.4;
     autoClipboard = p.getBool('autoClipboard') ?? false;
+    zeroDelay = p.getBool('zeroDelay') ?? Platform.isAndroid;
     ready = true;
     notifyListeners();
   }
@@ -48,6 +52,7 @@ class AppState extends ChangeNotifier {
     await p.setBool('trackpad', trackpadMode);
     await p.setDouble('sensitivity', pointerSensitivity);
     await p.setBool('autoClipboard', autoClipboard);
+    await p.setBool('zeroDelay', zeroDelay);
     notifyListeners();
   }
 
