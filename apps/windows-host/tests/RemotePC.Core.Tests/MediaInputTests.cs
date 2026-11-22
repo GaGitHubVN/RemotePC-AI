@@ -94,10 +94,10 @@ public class MediaInputTests
         abr.OnReport(0.2, 50);
         Assert.True(abr.CurrentKbps < start * 0.95);
         for (var i = 0; i < 60; i++) abr.OnReport(0, 50);
-        Assert.Equal(5000, abr.CurrentKbps); // capped at MaxKbps
+        Assert.Equal(8000, abr.CurrentKbps); // capped at MaxKbps
         for (var i = 0; i < 60; i++) abr.OnReport(0.5, 50);
         Assert.Equal(300, abr.CurrentKbps); // floored at MinKbps
-        Assert.True(abr.RecommendedFps < 30);
+        Assert.True(abr.RecommendedFps < 60); // halves the 60 fps target under heavy loss
     }
 
     [Fact]

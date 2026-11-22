@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'app_state.dart';
 import 'l10n.dart';
@@ -18,6 +19,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   await PlatformUi.init();
+  // Remote desktop wants the newest frame now, not a smoothed stream: show each frame as soon as it is decoded
+  // instead of holding it for the jitter-buffer target (WebRTC-ForcePlayoutDelay 0 ms). A field trial, so it must
+  // be set before the first peer connection exists.
+  try {
+    await WebRTC.initialize(options: {'zeroPlayoutDelay': true});
+  } catch (_) {}
   runApp(const RemotePcApp());
   await AppState.instance.init();
   PlatformUi.setThemeMode(AppState.instance.themeMode);

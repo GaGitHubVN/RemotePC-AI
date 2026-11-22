@@ -357,22 +357,24 @@ struct GlassToolbarView: View {
   var body: some View {
     // Container spacing < item spacing: neighbours stay separate circles (no tinted blob bleeding into the next one).
     GlassEffectContainer(spacing: 4) {
-      // Centered when the buttons fit; horizontally scrollable on narrow screens.
+      // Centered; a tighter row on narrow phones. No ScrollView: it delays touches on the buttons inside it
+      // (~150 ms, delaysContentTouches), which made taps feel late.
       ViewThatFits(in: .horizontal) {
-        row
-        ScrollView(.horizontal, showsIndicators: false) { row }
+        row(size: 44, spacing: 10)
+        row(size: 40, spacing: 5)
+        row(size: 36, spacing: 3)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  private var row: some View {
-    HStack(spacing: 10) {
+  private func row(size: CGFloat, spacing: CGFloat) -> some View {
+    HStack(spacing: spacing) {
       ForEach(model.items) { item in
         Button { model.onTap(item.id) } label: {
           Image(systemName: item.symbol)
-            .font(.system(size: 17, weight: .semibold))
-            .frame(width: 44, height: 44)
+            .font(.system(size: size * 0.39, weight: .semibold))
+            .frame(width: size, height: size)
             .foregroundStyle(item.destructive ? Color.red : (item.active ? Color.white : Color.primary))
         }
         .accessibilityLabel(item.label)
@@ -382,7 +384,7 @@ struct GlassToolbarView: View {
         .glassEffectID(item.id, in: ns)
       }
     }
-    .padding(.horizontal, 10)
+    .padding(.horizontal, spacing)
   }
 }
 

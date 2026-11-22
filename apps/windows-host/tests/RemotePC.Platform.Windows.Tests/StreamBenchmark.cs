@@ -22,11 +22,17 @@ public sealed class StreamBenchmark(ITestOutputHelper output)
     public void Pipeline_Fps_On_A_Changing_Desktop()
     {
         if (Environment.GetEnvironmentVariable("REMOTEPC_BENCH") != "1") return;
-        foreach (var preset in new[] { QualityPreset.Auto, QualityPreset.LowLatency })
+        foreach (var settings in new[]
+                 {
+                     StreamSettings.For(QualityPreset.Auto),
+                     StreamSettings.For(QualityPreset.Balanced),
+                     StreamSettings.For(QualityPreset.LowLatency),
+                 })
         {
-            var settings = StreamSettings.For(preset);
+            var preset = $"{settings.Preset} {settings.MaxHeight}p{settings.Fps}";
             var src = new DesktopScreenSource(output.WriteLine);
             long frames = 0, bytes = 0;
+            var lat = new List<double>();
             var stop = false;
             // Animate: invert a 200×200 square at ~120 Hz so every vsync has new content.
             var painter = new Thread(() =>
@@ -37,14 +43,25 @@ public sealed class StreamBenchmark(ITestOutputHelper output)
                 _ = ReleaseDC(IntPtr.Zero, dc);
             }) { IsBackground = true };
             painter.Start();
-            using (var p = src.Start(0, settings, f => { Interlocked.Increment(ref frames); Interlocked.Add(ref bytes, f.Data.Length); }))
+            using (var p = src.Start(0, settings, f =>
+                   {
+                       Interlocked.Increment(ref frames);
+                       Interlocked.Add(ref bytes, f.Data.Length);
+                       lock (lat) lat.Add((f.EncodeEndTicks - f.CaptureTicks) * 1000.0 / Stopwatch.Frequency);
+                   }))
             {
                 Thread.Sleep(1500); // warm-up (encoder creation, first IDR)
+                lock (lat) lat.Clear();
                 var f0 = Interlocked.Read(ref frames);
                 var sw = Stopwatch.StartNew();
                 Thread.Sleep(5000);
                 var fps = (Interlocked.Read(ref frames) - f0) / sw.Elapsed.TotalSeconds;
                 var s = p.Stats;
+                double[] l;
+                lock (lat) l = [.. lat.Order()];
+                var p50 = l.Length > 0 ? l[l.Length / 2] : 0;
+                var p95 = l.Length > 0 ? l[(int)(l.Length * 0.95)] : 0;
+                output.WriteLine($"{preset}: capture→encoded latency p50 {p50:F1} ms, p95 {p95:F1} ms");
                 output.WriteLine($"{preset}: {fps:F1} fps delivered (target {settings.Fps}), {s.Width}x{s.Height} {s.Encoder} hw={s.Hardware} " +
                                  $"capture {s.CaptureMs:F1} ms, convert {s.ConvertMs:F1} ms, encode {s.EncodeMs:F1} ms, dropped {s.FramesDropped}, " +
                                  $"{bytes * 8 / 1000 / 6.5:F0} kbps");

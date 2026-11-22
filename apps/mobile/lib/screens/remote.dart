@@ -111,13 +111,30 @@ class _RemoteScreenState extends State<RemoteScreen> {
 
   bool get _canControl => widget.host.can('control_input');
 
-  void _click(String button, Offset n, {bool double = false}) {
+  Offset? _lastTapAt, _lastTapRemote;
+  DateTime _lastTapTime = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Remote point for a tap. A second tap shortly after and close to the previous one reuses the previous remote
+  /// point, so Windows sees a proper double-click (it requires both clicks within a few pixels).
+  Offset _tapTarget(Offset local) {
+    final n = _toRemote(local)!;
+    final now = DateTime.now();
+    final again = _lastTapAt != null &&
+        _lastTapRemote != null &&
+        now.difference(_lastTapTime) < const Duration(milliseconds: 450) &&
+        (local - _lastTapAt!).distance < 24;
+    final target = again ? _lastTapRemote! : n;
+    _lastTapAt = local;
+    _lastTapRemote = target;
+    _lastTapTime = now;
+    return target;
+  }
+
+  void _click(String button, Offset n) {
     if (!_canControl) return _toast(tr('not_allowed'));
-    HapticFeedback.selectionClick();
-    for (var i = 0; i < (double ? 2 : 1); i++) {
-      link.sendInput({'k': 'btn', 'b': button, 'd': true, 'x': n.dx, 'y': n.dy});
-      link.sendInput({'k': 'btn', 'b': button, 'd': false, 'x': n.dx, 'y': n.dy});
-    }
+    link.sendInput({'k': 'btn', 'b': button, 'd': true, 'x': n.dx, 'y': n.dy});
+    link.sendInput({'k': 'btn', 'b': button, 'd': false, 'x': n.dx, 'y': n.dy});
+    HapticFeedback.selectionClick(); // after sending: never in front of the input
   }
 
   // ---------- gestures ----------
@@ -342,11 +359,11 @@ class _RemoteScreenState extends State<RemoteScreen> {
 
   Future<void> _pickQuality() async {
     final p = await showActions(context, title: tr('quality'), actions: const [
-      DialogAction('Auto', 'Auto'),
-      DialogAction('DataSaver', 'Data saver'),
-      DialogAction('Balanced', 'Balanced'),
-      DialogAction('HighQuality', 'High quality'),
-      DialogAction('LowLatency', 'Low latency'),
+      DialogAction('Auto', 'Auto · 1080p · 60 fps'),
+      DialogAction('DataSaver', 'Data saver · 720p · 20 fps'),
+      DialogAction('Balanced', 'Balanced · 900p · 60 fps'),
+      DialogAction('HighQuality', 'High quality · 1440p · 30 fps'),
+      DialogAction('LowLatency', 'Low latency · 720p · 60 fps'),
       DialogAction('Custom', '1080p · 60 fps · 12 Mbps'),
       DialogAction('cancel', 'Cancel', cancel: true),
     ]);
@@ -482,19 +499,18 @@ class _RemoteScreenState extends State<RemoteScreen> {
                 _viewSize = c.biggest;
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  // Every tap is sent at once. No onDoubleTap here: with it Flutter holds each single tap ~300 ms
+                  // to see whether a second one follows. Windows itself turns two quick clicks into a double-click;
+                  // _tapTarget keeps the second click on the same pixel so it qualifies.
                   onTapUp: (d) {
                     if (_trackpad) {
                       _click('left', _pointer);
-                    } else if (_toRemote(d.localPosition) case final n?) {
+                    } else if (_toRemote(d.localPosition) != null) {
+                      final n = _tapTarget(d.localPosition);
                       link.sendMove(n.dx, n.dy);
                       _click('left', n);
                     }
                   },
-                  onDoubleTapDown: (d) {
-                    final n = _trackpad ? _pointer : _toRemote(d.localPosition);
-                    if (n != null) _click('left', n, double: true);
-                  },
-                  onDoubleTap: () {},
                   onLongPressStart: (d) {
                     final n = _trackpad ? _pointer : _toRemote(d.localPosition);
                     if (n != null) _click('right', n);

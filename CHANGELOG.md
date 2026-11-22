@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.0 — 2026-11-22 (pre-release)
+
+User report on 0.3.0: wants a steady 60 fps, lowest possible latency; taps on the phone were sometimes late.
+
+### Changed
+- 60 fps by default: "Auto" is now 1080p60 (6 Mbps, up to 12), "Balanced" 900p60. It was capped at 30 fps, so the
+  phone could never see more than 30. The quality menu now shows resolution and fps for each preset.
+- Capture and encoding overlap: the capture thread grabs and converts the next frame while the encode thread
+  compresses the current one; only the newest frame is kept (no queue = no added delay). Frames are paced on an
+  exact 1/fps grid and a fresh frame waits only until its slot. Dev PC (Intel QSV, changing desktop): 1080p
+  57 → 61 fps, 900p 61 fps, 720p 61 fps; capture→encoded p50 14–18 ms, p95 24–26 ms (`StreamBenchmark`).
+- Phone shows every video frame as soon as it is decoded (`zeroPlayoutDelay`: WebRTC jitter-buffer playout delay
+  pinned to 0 ms) instead of holding frames back to smooth the stream.
+
+### Fixed
+- Tap → click was delayed ~300 ms: the remote view listened for double-taps, so Flutter held every single tap to
+  see whether a second followed. Taps are now sent immediately; a quick second tap reuses the first tap's point so
+  Windows still recognises a double-click.
+- iOS 26 toolbar: on narrow iPhones the buttons sat in a ScrollView, which delays touches (~150 ms). It now uses
+  smaller buttons instead of scrolling.
+
 ## 0.3.0 — 2026-11-21 (pre-release)
 
 First report from a real iPhone (iOS 26, user): pairing + connection + video + mouse worked; ~10 fps max, unstable

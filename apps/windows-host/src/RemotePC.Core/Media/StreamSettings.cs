@@ -9,9 +9,9 @@ public sealed record StreamSettings
     public QualityPreset Preset { get; init; } = QualityPreset.Auto;
     public int MaxWidth { get; init; } = 1920;
     public int MaxHeight { get; init; } = 1080;
-    public int Fps { get; init; } = 30;
-    public int TargetKbps { get; init; } = 4000;
-    public int MaxKbps { get; init; } = 8000;
+    public int Fps { get; init; } = 60;
+    public int TargetKbps { get; init; } = 6000;
+    public int MaxKbps { get; init; } = 12000;
     public int MinKbps { get; init; } = 300;
     public VideoCodec Codec { get; init; } = VideoCodec.H264;
     public bool RenderCursor { get; init; } = true;
@@ -20,7 +20,7 @@ public sealed record StreamSettings
     public static StreamSettings For(QualityPreset p) => p switch
     {
         QualityPreset.DataSaver => new() { Preset = p, MaxWidth = 1280, MaxHeight = 720, Fps = 20, TargetKbps = 800, MaxKbps = 1500, MinKbps = 200 },
-        QualityPreset.Balanced => new() { Preset = p, MaxWidth = 1600, MaxHeight = 900, Fps = 30, TargetKbps = 2500, MaxKbps = 5000 },
+        QualityPreset.Balanced => new() { Preset = p, MaxWidth = 1600, MaxHeight = 900, Fps = 60, TargetKbps = 4000, MaxKbps = 8000 },
         QualityPreset.HighQuality => new() { Preset = p, MaxWidth = 2560, MaxHeight = 1440, Fps = 30, TargetKbps = 8000, MaxKbps = 16000, MinKbps = 1000 },
         QualityPreset.LowLatency => new() { Preset = p, MaxWidth = 1280, MaxHeight = 720, Fps = 60, TargetKbps = 3000, MaxKbps = 6000 },
         QualityPreset.Custom => new() { Preset = p },
