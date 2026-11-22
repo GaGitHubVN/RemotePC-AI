@@ -23,6 +23,15 @@ class RpcError implements Exception {
 class StreamStatsSnapshot {
   double fps = 0, kbps = 0, rttMs = 0, jitterMs = 0, decodeMs = 0, jitterBufferMs = 0;
   int packetsLost = 0, framesDecoded = 0, width = 0, height = 0;
+  // Diagnostics (shown in the stats dialog and in test failures).
+  int samples = 0, packetsReceived = 0, bytesReceived = 0, keyFramesDecoded = 0, pliCount = 0, nackCount = 0;
+  bool hasInboundVideo = false;
+  String lastError = '';
+
+  @override
+  String toString() => 'samples=$samples inbound=$hasInboundVideo packets=$packetsReceived bytes=$bytesReceived '
+      'decoded=$framesDecoded keyDecoded=$keyFramesDecoded pli=$pliCount nack=$nackCount lost=$packetsLost '
+      '${width}x$height fps=${fps.toStringAsFixed(0)} codec=$codec err=$lastError';
   String path = '—'; // direct-lan | direct-stun | relay
   String codec = '';
 }
@@ -499,6 +508,12 @@ class HostLink extends ChangeNotifier {
         switch (r.type) {
           case 'inbound-rtp':
             if (v['kind'] != 'video' && v['mediaType'] != 'video') break;
+            stats.hasInboundVideo = true;
+            stats.packetsReceived = (v['packetsReceived'] as num?)?.toInt() ?? 0;
+            stats.bytesReceived = (v['bytesReceived'] as num?)?.toInt() ?? 0;
+            stats.keyFramesDecoded = (v['keyFramesDecoded'] as num?)?.toInt() ?? 0;
+            stats.pliCount = (v['pliCount'] as num?)?.toInt() ?? 0;
+            stats.nackCount = (v['nackCount'] as num?)?.toInt() ?? 0;
             stats.fps = (v['framesPerSecond'] as num?)?.toDouble() ?? stats.fps;
             stats.packetsLost = (v['packetsLost'] as num?)?.toInt() ?? 0;
             stats.jitterMs = ((v['jitter'] as num?)?.toDouble() ?? 0) * 1000;
@@ -538,8 +553,11 @@ class HostLink extends ChangeNotifier {
         final types = {local?['candidateType'], remote?['candidateType']};
         stats.path = types.contains('relay') ? 'relay (TURN)' : types.contains('srflx') || types.contains('prflx') ? 'direct (STUN)' : 'direct (LAN)';
       }
+      stats.samples++;
       notifyListeners();
-    } catch (_) {}
+    } catch (e) {
+      stats.lastError = '$e';
+    }
   }
 
   // ---------------- files ----------------

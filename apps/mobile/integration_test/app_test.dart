@@ -64,10 +64,10 @@ void main() {
     }
   }
 
-  Future<void> waitFor(WidgetTester t, bool Function() cond, String what, {int seconds = 40}) async {
+  Future<void> waitFor(WidgetTester t, bool Function() cond, String what, {int seconds = 40, String Function()? detail}) async {
     final end = DateTime.now().add(Duration(seconds: seconds));
     while (!cond()) {
-      if (DateTime.now().isAfter(end)) fail('timed out waiting for $what');
+      if (DateTime.now().isAfter(end)) fail('timed out waiting for $what${detail == null ? '' : ' [${detail()}]'}');
       await t.pump(const Duration(milliseconds: 100));
     }
   }
@@ -102,7 +102,7 @@ void main() {
     openRemote(homeCtx, host);
     final link = s.link(host);
     await waitFor(t, () => link.isConnected, 'WebRTC connected (state=${link.state.name} error=${link.error})', seconds: 120);
-    await waitFor(t, () => link.stats.framesDecoded > 5, 'decoded video frames (decoded=${link.stats.framesDecoded})', seconds: 60);
+    await waitFor(t, () => link.stats.framesDecoded > 5, 'decoded video frames', seconds: 60, detail: () => '${link.stats}');
     // ignore: avoid_print
     print('video: ${link.stats.width}x${link.stats.height} decoded=${link.stats.framesDecoded} codec=${link.stats.codec} path=${link.stats.path}');
     await shot(t, '03-remote');

@@ -357,12 +357,15 @@ struct GlassToolbarView: View {
   var body: some View {
     // Container spacing < item spacing: neighbours stay separate circles (no tinted blob bleeding into the next one).
     GlassEffectContainer(spacing: 4) {
-      // Centered; a tighter row on narrow phones. No ScrollView: it delays touches on the buttons inside it
-      // (~150 ms, delaysContentTouches), which made taps feel late.
-      ViewThatFits(in: .horizontal) {
-        row(size: 44, spacing: 10)
-        row(size: 40, spacing: 5)
-        row(size: 36, spacing: 3)
+      // One centered row whose button size follows the available width (44 pt down to 34 pt on narrow phones).
+      // No ScrollView: it delays touches on the buttons inside it (~150 ms, delaysContentTouches). No
+      // ViewThatFits either: its candidates would repeat the same glassEffectIDs.
+      GeometryReader { geo in
+        let n = CGFloat(max(model.items.count, 1))
+        let size = min(44, max(34, (geo.size.width - 16) / (n * 1.15)))
+        let spacing = min(10, max(3, (geo.size.width - 16 - n * size) / max(n - 1, 1)))
+        row(size: size, spacing: spacing)
+          .frame(width: geo.size.width, height: geo.size.height)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
