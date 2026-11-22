@@ -275,6 +275,27 @@
                     </Border>
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
+                            <DockPanel Margin="0,0,0,10">
+                                <Button DockPanel.Dock="Right" Content="{Binding L[cloud.addBtn]}" Command="{Binding AddCloudCommand}"/>
+                                <TextBlock Text="{Binding L[cloud.section]}" Style="{StaticResource H2}"/>
+                            </DockPanel>
+                            <TextBlock Text="{Binding L[cloud.empty]}" Style="{StaticResource Muted}" Visibility="{Binding CloudAccounts.Count, Converter={x:Static vm:ZeroToVisible.Instance}}"/>
+                            <ItemsControl ItemsSource="{Binding CloudAccounts}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,4">
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource Secondary}" Content="{Binding DataContext.L[cloud.remove], RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    Command="{Binding DataContext.RemoveCloudCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+                                            <TextBlock Width="160" Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
                             <TextBlock Text="{Binding L[ai.models]}" Style="{StaticResource H2}"/>
                             <ListBox ItemsSource="{Binding Models}" SelectedItem="{Binding ModelSelection}">
                                 <ListBox.ItemTemplate>

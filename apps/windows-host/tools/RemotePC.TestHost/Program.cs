@@ -49,7 +49,7 @@ sessions.SessionCreated += files.Attach;
 sessions.SessionClosed += s => files.AbortDevice(s.DeviceId);
 
 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-using var ai = new AiService(http, new AiConfig());
+using var ai = new AiService(http, new AiConfig()) { Secrets = protector };
 ai.RegisterRpc(sessions.Rpc);
 _ = ai.ScanAsync(CancellationToken.None);
 

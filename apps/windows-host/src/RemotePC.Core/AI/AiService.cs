@@ -23,19 +23,26 @@ public sealed record CustomEndpoint(string Id, string Name, string Url);
 /// <param name="Kind">"openai" (OpenAI-compatible chat completions) or "anthropic" (Claude Messages API).</param>
 /// <param name="ProtectedKey">Base64 of the DPAPI-protected API key.</param>
 /// <param name="KeyHint">Last 4 characters, for display only.</param>
-public sealed record CloudEndpoint(string Id, string Name, string Kind, string BaseUrl, string ProtectedKey, string KeyHint);
+public sealed record CloudEndpoint(string Id, string Name, string Kind, string BaseUrl, string ProtectedKey, string KeyHint)
+{
+    /// <summary>"key" (pasted API key) or "oauth" (key obtained by signing in to the account).</summary>
+    public string Auth { get; init; } = "key";
+}
 
 /// <summary>Well-known cloud AI services. Custom OpenAI-compatible URLs are allowed too (HTTPS only).</summary>
-public sealed record CloudPreset(string Id, string Name, string Kind, string BaseUrl, string KeyUrl)
+/// <param name="OAuth">The service lets this app sign in to the user's account and obtain a key (PKCE), see <see cref="CloudOAuth"/>.</param>
+public sealed record CloudPreset(string Id, string Name, string Kind, string BaseUrl, string KeyUrl, bool OAuth = false)
 {
     public static readonly IReadOnlyList<CloudPreset> All =
     [
         new("anthropic", "Claude (Anthropic)", "anthropic", "https://api.anthropic.com/", "https://platform.claude.com/settings/keys"),
         new("openai", "OpenAI", "openai", "https://api.openai.com/v1/", "https://platform.openai.com/api-keys"),
         new("gemini", "Google Gemini", "openai", "https://generativelanguage.googleapis.com/v1beta/openai/", "https://aistudio.google.com/apikey"),
-        new("openrouter", "OpenRouter", "openai", "https://openrouter.ai/api/v1/", "https://openrouter.ai/keys"),
+        new("openrouter", "OpenRouter", "openai", "https://openrouter.ai/api/v1/", "https://openrouter.ai/keys", OAuth: true),
         new("groq", "Groq", "openai", "https://api.groq.com/openai/v1/", "https://console.groq.com/keys"),
         new("deepseek", "DeepSeek", "openai", "https://api.deepseek.com/v1/", "https://platform.deepseek.com/api_keys"),
+        new("xai", "xAI Grok", "openai", "https://api.x.ai/v1/", "https://console.x.ai/"),
+        new("mistral", "Mistral AI", "openai", "https://api.mistral.ai/v1/", "https://console.mistral.ai/api-keys"),
     ];
 }
 
@@ -199,10 +206,56 @@ public sealed class AiService : IDisposable
             preset = new CloudPreset("custom-" + u.Host.Replace('.', '-'), string.IsNullOrWhiteSpace(customName) ? u.Host : customName.Trim(), "openai", u.ToString(), "");
         }
         else preset = CloudPreset.All.FirstOrDefault(p => p.Id == presetId) ?? throw new ArgumentException("unknown cloud service");
+        return Store(preset, apiKey, "key");
+    }
+
+    private CloudEndpoint Store(CloudPreset preset, string apiKey, string auth)
+    {
         var ep = new CloudEndpoint("cloud-" + preset.Id, preset.Name, preset.Kind, preset.BaseUrl,
-            Convert.ToBase64String(Secrets.Protect(System.Text.Encoding.UTF8.GetBytes(apiKey), KeyPurpose)), apiKey[^4..]);
+            Convert.ToBase64String(Secrets!.Protect(System.Text.Encoding.UTF8.GetBytes(apiKey), KeyPurpose)), apiKey[^4..]) { Auth = auth };
         UpdateConfig(c => c with { CloudEndpoints = [.. c.CloudEndpoints.Where(x => x.Id != ep.Id), ep] });
         return ep;
+    }
+
+    // ---- account sign-in (OAuth PKCE) ----
+
+    private sealed record PendingSignIn(string Preset, string Verifier, DateTimeOffset Expires);
+    private readonly Dictionary<string, PendingSignIn> _signIns = [];
+    /// <summary>Token exchange endpoint override (tests only).</summary>
+    internal string ExchangeEndpoint { get; set; } = CloudOAuth.OpenRouterExchange;
+
+    /// <summary>
+    /// Starts an account sign-in. The verifier stays on this PC; the returned URL is opened in a browser (PC or phone).
+    /// With <paramref name="callback"/> null the service shows a one-time code that the user pastes back.
+    /// </summary>
+    public (string FlowId, string Url) StartSignIn(string presetId, string? callback = null, string? state = null)
+    {
+        if (Secrets is null) throw new InvalidOperationException("secret storage unavailable");
+        var preset = CloudPreset.All.FirstOrDefault(p => p.Id == presetId && p.OAuth)
+            ?? throw new ArgumentException("This service does not support signing in with an account; use an API key.");
+        var (verifier, challenge) = CloudOAuth.NewPkce();
+        var id = CloudOAuth.NewState();
+        lock (_lock)
+        {
+            var now = DateTimeOffset.UtcNow;
+            foreach (var k in _signIns.Where(x => x.Value.Expires < now).Select(x => x.Key).ToList()) _signIns.Remove(k);
+            if (_signIns.Count >= 8) _signIns.Remove(_signIns.MinBy(x => x.Value.Expires).Key);
+            _signIns[id] = new PendingSignIn(preset.Id, verifier, now.AddMinutes(10));
+        }
+        return (id, CloudOAuth.AuthUrl(challenge, callback, state, "RemotePC AI - " + Environment.MachineName));
+    }
+
+    /// <summary>Exchanges the sign-in code for the account key and stores it like a pasted key. One use per flow.</summary>
+    public async Task<CloudEndpoint> FinishSignInAsync(string flowId, string code, CancellationToken ct)
+    {
+        PendingSignIn? p;
+        lock (_lock)
+        {
+            if (_signIns.Remove(flowId, out p) && p.Expires < DateTimeOffset.UtcNow) p = null;
+        }
+        if (p is null) throw new ArgumentException("This sign-in has expired. Start again.");
+        var key = await CloudOAuth.ExchangeAsync(_http, code, p.Verifier, ct, ExchangeEndpoint).ConfigureAwait(false);
+        return Store(CloudPreset.All.First(x => x.Id == p.Preset), key, "oauth");
     }
 
     public void RemoveCloud(string id)
@@ -224,12 +277,12 @@ public sealed class AiService : IDisposable
 
     public JsonArray CloudJson() => new([.. Config.CloudEndpoints.Select(c => (JsonNode)new JsonObject
     {
-        ["id"] = c.Id, ["name"] = c.Name, ["kind"] = c.Kind, ["baseUrl"] = c.BaseUrl, ["keyHint"] = "…" + c.KeyHint,
+        ["id"] = c.Id, ["name"] = c.Name, ["kind"] = c.Kind, ["baseUrl"] = c.BaseUrl, ["keyHint"] = "…" + c.KeyHint, ["auth"] = c.Auth,
     })]);
 
     public static JsonArray PresetsJson() => new([.. CloudPreset.All.Select(p => (JsonNode)new JsonObject
     {
-        ["id"] = p.Id, ["name"] = p.Name, ["kind"] = p.Kind, ["keyUrl"] = p.KeyUrl,
+        ["id"] = p.Id, ["name"] = p.Name, ["kind"] = p.Kind, ["keyUrl"] = p.KeyUrl, ["oauth"] = p.OAuth,
     })]);
 
     /// <summary>Runs a chat on the selected model. Waits for a free inference slot (resource limit).</summary>
@@ -308,12 +361,26 @@ public sealed class AiService : IDisposable
             try { ep = AddCloud((string?)p?["preset"] ?? "", (string?)p?["apiKey"] ?? "", (string?)p?["url"], (string?)p?["name"]); }
             catch (ArgumentException e) { throw new RpcException("bad_request", e.Message); }
             catch (InvalidOperationException e) { throw new RpcException("unavailable", e.Message); }
-            await ScanAsync(ctx.Cancellation).ConfigureAwait(false);
-            await RefreshModelsAsync(ctx.Cancellation).ConfigureAwait(false);
-            var st = Statuses.FirstOrDefault(s => s.Id == ep.Id);
-            var o = StatusJson();
-            o["added"] = new JsonObject { ["id"] = ep.Id, ["ok"] = st?.Running == true, ["error"] = st?.Error };
-            return o;
+            return await AddedJsonAsync(ep, ctx.Cancellation).ConfigureAwait(false);
+        });
+        rpc.Register("ai.cloud.signin.start", Permission.UseAi, (p, _) =>
+        {
+            try
+            {
+                var (id, url) = StartSignIn((string?)p?["preset"] ?? "");
+                return Task.FromResult<JsonNode?>(new JsonObject { ["flowId"] = id, ["url"] = url, ["expiresIn"] = 600 });
+            }
+            catch (ArgumentException e) { throw new RpcException("bad_request", e.Message); }
+            catch (InvalidOperationException e) { throw new RpcException("unavailable", e.Message); }
+        });
+        rpc.Register("ai.cloud.signin.finish", Permission.UseAi, async (p, ctx) =>
+        {
+            CloudEndpoint ep;
+            try { ep = await FinishSignInAsync((string?)p?["flowId"] ?? "", (string?)p?["code"] ?? "", ctx.Cancellation).ConfigureAwait(false); }
+            catch (ArgumentException e) { throw new RpcException("bad_request", e.Message); }
+            catch (AiProviderException e) { throw new RpcException("ai_error", e.Message); }
+            catch (HttpRequestException e) { throw new RpcException("ai_unavailable", "The sign-in service is not reachable: " + e.Message); }
+            return await AddedJsonAsync(ep, ctx.Cancellation).ConfigureAwait(false);
         });
         rpc.Register("ai.cloud.remove", Permission.UseAi, (p, _) =>
         {
@@ -351,6 +418,31 @@ public sealed class AiService : IDisposable
                 ["usage"] = usage is null ? null : JsonSerializer.SerializeToNode(usage, Protocol.ProtocolJson.Options),
             };
         });
+    }
+
+    /// <summary>Probes the new account, refreshes models and, when nothing is selected yet, selects a sensible model.</summary>
+    public async Task<JsonObject> AddedJsonAsync(CloudEndpoint ep, CancellationToken ct)
+    {
+        await ScanAsync(ct).ConfigureAwait(false);
+        await RefreshModelsAsync(ct).ConfigureAwait(false);
+        var st = Statuses.FirstOrDefault(s => s.Id == ep.Id);
+        if (st?.Running == true && Selected is null && DefaultModel(ep.Id) is { } m)
+        {
+            try { Select(ep.Id, m); } catch (ArgumentException) { }
+        }
+        var o = StatusJson();
+        o["added"] = new JsonObject { ["id"] = ep.Id, ["ok"] = st?.Running == true, ["error"] = st?.Error };
+        return o;
+    }
+
+    internal string? DefaultModel(string providerId)
+    {
+        List<AiModel> ms;
+        lock (_lock) ms = [.. _models.GetValueOrDefault(providerId) ?? []];
+        string[] prefer = ["claude-sonnet", "anthropic/claude-sonnet", "gpt-5", "openai/gpt-5", "gemini-3", "gemini-2.5-pro", "grok-4", "mistral-large", "deepseek-chat"];
+        foreach (var pre in prefer)
+            if (ms.FirstOrDefault(m => m.Id.StartsWith(pre, StringComparison.OrdinalIgnoreCase)) is { } hit) return hit.Id;
+        return ms.FirstOrDefault()?.Id;
     }
 
     public const int MaxMessageChars = 400_000;

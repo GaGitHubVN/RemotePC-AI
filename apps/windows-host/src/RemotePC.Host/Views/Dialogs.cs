@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using QRCoder;
+using RemotePC.Core.AI;
 using RemotePC.Core.Security;
 using RemotePC.Host.Services;
 using RemotePC.Host.ViewModels;
@@ -215,5 +216,132 @@ public static class InputDialog
         w.Loaded += (_, _) => { box.Focus(); box.SelectAll(); };
         w.ShowDialog();
         return result;
+    }
+}
+
+/// <summary>
+/// Adds a cloud AI account on this PC: paste an API key, or sign in with the account in the default browser
+/// (OpenRouter's official PKCE login, redirected to a one-shot listener on localhost). Keys are DPAPI-protected.
+/// </summary>
+public sealed class CloudAiWindow : Window
+{
+    private readonly HostRuntime _rt;
+    private readonly ComboBox _preset = new() { DisplayMemberPath = "Name", Margin = new Thickness(0, 0, 0, 10) };
+    private readonly TextBox _url = new() { Margin = new Thickness(0, 0, 0, 10), Visibility = Visibility.Collapsed };
+    private readonly PasswordBox _key = new() { Margin = new Thickness(0, 0, 0, 10), Padding = new Thickness(6, 5, 6, 5) };
+    private readonly TextBlock _status = Ui.Text("", 13, false, "TextSecondary");
+    private readonly Button _signIn = Ui.Btn("");
+    private readonly Button _add = Ui.Btn(Loc.Instance["cloud.add"]);
+    private readonly Button _getKey = Ui.Btn(Loc.Instance["cloud.getKey"], "Secondary");
+    private CancellationTokenSource? _cts;
+
+    private static readonly CloudPreset Custom = new("custom", "OpenAI-compatible (URL)…", "openai", "", "");
+
+    public CloudAiWindow(HostRuntime rt)
+    {
+        _rt = rt;
+        var f = Ui.Frame(Loc.Instance["cloud.title"], 480);
+        Title = f.Title; Width = f.Width; SizeToContent = f.SizeToContent; ResizeMode = f.ResizeMode;
+        WindowStartupLocation = f.WindowStartupLocation; Background = f.Background; FontFamily = f.FontFamily;
+        foreach (var p in CloudPreset.All) _preset.Items.Add(p);
+        _preset.Items.Add(Custom);
+        _preset.SelectionChanged += (_, _) => OnPreset();
+        _preset.SelectedIndex = 0;
+
+        var panel = new StackPanel { Margin = new Thickness(24) };
+        panel.Children.Add(Ui.Text(Loc.Instance["cloud.title"], 19, true));
+        panel.Children.Add(Ui.Text(Loc.Instance["cloud.note"], 12, false, "TextSecondary"));
+        panel.Children.Add(Ui.Text(Loc.Instance["cloud.service"], 13, true));
+        panel.Children.Add(_preset);
+        panel.Children.Add(_url);
+        panel.Children.Add(_signIn);
+        _signIn.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _signIn.Margin = new Thickness(0, 0, 0, 12);
+        panel.Children.Add(Ui.Text(Loc.Instance["cloud.key"], 13, true));
+        panel.Children.Add(_key);
+        panel.Children.Add(_status);
+        var close = Ui.Btn(Loc.Instance["btn.close"], "Secondary");
+        close.Click += (_, _) => Close();
+        panel.Children.Add(new DockPanel
+        {
+            Margin = new Thickness(0, 8, 0, 0),
+            Children = { _getKey, new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Children = { close, _add } } },
+        });
+        Content = panel;
+
+        _getKey.Click += (_, _) => { if (Current.KeyUrl.Length > 0) OpenBrowser(Current.KeyUrl); };
+        _add.Click += async (_, _) => await AddKeyAsync();
+        _signIn.Click += async (_, _) => await SignInAsync();
+        Closed += (_, _) => { _cts?.Cancel(); _key.Clear(); };
+    }
+
+    private CloudPreset Current => _preset.SelectedItem as CloudPreset ?? CloudPreset.All[0];
+
+    private void OnPreset()
+    {
+        var p = Current;
+        _url.Visibility = p == Custom ? Visibility.Visible : Visibility.Collapsed;
+        _signIn.Visibility = p.OAuth ? Visibility.Visible : Visibility.Collapsed;
+        _signIn.Content = string.Format(Loc.Instance["cloud.signIn"], p.Name);
+        _getKey.Visibility = p.KeyUrl.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _status.Text = p.OAuth ? Loc.Instance["cloud.signInNote"] : "";
+    }
+
+    private static void OpenBrowser(string url) =>
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+
+    private void Busy(bool on, string text)
+    {
+        _add.IsEnabled = _signIn.IsEnabled = _preset.IsEnabled = !on;
+        _status.Text = text;
+        _status.Foreground = Ui.B("TextSecondary");
+    }
+
+    private void Fail(string message)
+    {
+        Busy(false, "✗ " + message);
+        _status.Foreground = Ui.B("Danger");
+    }
+
+    private async Task Done(CloudEndpoint ep)
+    {
+        Busy(true, Loc.Instance["cloud.checking"]);
+        var r = await _rt.Ai.AddedJsonAsync(ep, CancellationToken.None);
+        var ok = (bool?)r["added"]?["ok"] == true;
+        _rt.Log.Write("ai", $"cloud AI account added: {ep.Name} ({ep.Auth}){(ok ? "" : " — not reachable")}");
+        if (ok) { MessageBox.Show(this, $"{Loc.Instance["cloud.added"]}: {ep.Name}", "RemotePC AI"); Close(); }
+        else Fail($"{Loc.Instance["cloud.failed"]}: {(string?)r["added"]?["error"]}");
+    }
+
+    private async Task AddKeyAsync()
+    {
+        CloudEndpoint ep;
+        try { ep = _rt.Ai.AddCloud(Current.Id, _key.Password, Current == Custom ? _url.Text : null); }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException) { Fail(e.Message); return; }
+        _key.Clear();
+        await Done(ep);
+    }
+
+    private async Task SignInAsync()
+    {
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        try
+        {
+            using var lr = new LoopbackRedirect();
+            var state = CloudOAuth.NewState();
+            var (flow, url) = _rt.Ai.StartSignIn(Current.Id, lr.CallbackUrl, state);
+            Busy(true, Loc.Instance["cloud.waiting"]);
+            OpenBrowser(url);
+            var code = await lr.WaitForCodeAsync(state, Loc.Instance["cloud.browserDone"], _cts.Token);
+            Activate();
+            Busy(true, Loc.Instance["cloud.checking"]);
+            await Done(await _rt.Ai.FinishSignInAsync(flow, code, _cts.Token));
+        }
+        catch (OperationCanceledException) { if (IsLoaded) Fail(Loc.Instance["cloud.timeout"]); }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or AiProviderException or System.Net.Http.HttpRequestException or System.Net.Sockets.SocketException)
+        {
+            Fail(e.Message);
+        }
     }
 }

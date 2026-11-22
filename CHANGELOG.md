@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0 — 2026-11-22 (pre-release)
+
+User request: cloud AI with an API key **and** by signing in with an account.
+
+### Added
+- Cloud AI account sign-in (OpenRouter official OAuth PKCE): one account gives Claude, GPT, Gemini, Llama… models.
+  On the PC the browser returns to a one-shot `localhost` listener (state-checked); on the phone the browser shows a
+  code to paste. The PKCE verifier is created and kept on the PC, which exchanges the code; the key is DPAPI-protected
+  and never reaches the phone. RPC `ai.cloud.signin.start` / `ai.cloud.signin.finish`.
+- PC app: new "Cloud AI" card on the AI page (list, add with API key or sign-in, remove). Until now cloud accounts
+  could only be added from the phone.
+- Presets: xAI Grok and Mistral AI. "Get an API key" now opens the browser (phone and PC) instead of copying the link.
+- After adding an account, if no model was selected yet, a sensible default is selected (Claude Sonnet / GPT-5 /
+  Gemini… when available) so chat works immediately.
+- Accounts show how they were added (API key or account sign-in).
+
+### Not possible by design
+- "Sign in with ChatGPT / Claude.ai / Gemini app": those subscriptions have no login that third-party apps may use for
+  API access. Documented in AI_SETUP.
+
 ## 0.4.0 — 2026-11-22 (pre-release)
 
 User report on 0.3.0: wants a steady 60 fps, lowest possible latency; taps on the phone were sometimes late.

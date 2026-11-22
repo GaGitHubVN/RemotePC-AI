@@ -13,6 +13,36 @@ RemotePC AI never ships a model and never downloads one by itself. It uses the A
 
 "Unknown" means the server did not report it — the app does not guess.
 
+## Cloud AI (API key or account sign-in)
+
+Besides local runtimes, the PC can use cloud AI accounts. Add them on the PC (**AI → Cloud AI → Add cloud AI…**) or
+from the phone (**AI → model picker → Add cloud AI**). Either way the key lives only on the PC, encrypted with DPAPI;
+it is never stored on the phone and never sent back to it.
+
+| Service | API key | Account sign-in |
+|---|---|---|
+| Claude (Anthropic) | yes — platform.claude.com → API keys | no |
+| OpenAI | yes — platform.openai.com/api-keys | no |
+| Google Gemini | yes — aistudio.google.com/apikey | no |
+| OpenRouter (Claude, GPT, Gemini, Llama… in one account) | yes | **yes** |
+| Groq, DeepSeek, xAI Grok, Mistral | yes | no |
+| Any OpenAI-compatible `https://` endpoint | yes | no |
+
+**Account sign-in** uses OpenRouter's official OAuth PKCE login:
+- on the PC, the browser opens, you sign in and approve, and the browser returns to a one-shot listener on
+  `localhost` — nothing to copy;
+- on the phone, the browser opens the same page; after you approve, it shows a code that you paste into the app
+  (valid 10 minutes).
+The PC creates the PKCE verifier and exchanges the code itself, so the resulting key never touches the phone. Usage is
+billed to your OpenRouter account; you can limit or revoke the key at openrouter.ai/keys.
+
+Why there is no "Sign in with ChatGPT / Claude / Gemini": those consumer subscriptions (ChatGPT Plus, Claude Pro/Max,
+Gemini app) do not offer a login that third-party apps may use for API access. Using them would mean imitating the
+vendors' own apps, which their terms forbid. Use an API key from the developer platform, or OpenRouter sign-in.
+
+With cloud AI, the chat text — and, for agent tasks, screenshots and file contents the agent reads — is sent to that
+provider. The PC shows every cloud provider as "remote".
+
 ## Ollama quick start
 
 ```powershell

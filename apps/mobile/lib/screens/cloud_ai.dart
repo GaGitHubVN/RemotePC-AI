@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/host_link.dart';
 import '../l10n.dart';
@@ -19,6 +20,8 @@ class CloudAiScreen extends StatefulWidget {
 class _CloudAiScreenState extends State<CloudAiScreen> {
   final _key = TextEditingController();
   final _url = TextEditingController();
+  final _code = TextEditingController();
+  String? _flowId;
   List<Map<String, dynamic>> _presets = [];
   List<Map<String, dynamic>> _accounts = [];
   String _preset = 'anthropic';
@@ -36,6 +39,7 @@ class _CloudAiScreenState extends State<CloudAiScreen> {
     _key.clear();
     _key.dispose();
     _url.dispose();
+    _code.dispose();
     super.dispose();
   }
 
@@ -54,6 +58,67 @@ class _CloudAiScreenState extends State<CloudAiScreen> {
 
   Map<String, dynamic>? get _current => _presets.where((p) => p['id'] == _preset).firstOrNull;
 
+  Future<void> _open(String url) async {
+    var ok = false;
+    try {
+      ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {}
+    if (!ok) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (mounted) showToast(context, tr('open_failed'));
+    }
+  }
+
+  /// Account sign-in: the PC creates the PKCE verifier and the login URL; the phone only opens it and relays the
+  /// one-time code shown by the service. The account key is created and kept on the PC.
+  Future<void> _startSignIn() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final r = await widget.link.call('ai.cloud.signin.start', {'preset': _preset});
+      if (!mounted) return;
+      setState(() => _flowId = r['flowId'] as String?);
+      await _open(r['url'] as String);
+    } on RpcError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _finishSignIn() async {
+    final code = _code.text.trim();
+    if (code.isEmpty || _flowId == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final r = await widget.link.call('ai.cloud.signin.finish', {'flowId': _flowId, 'code': code}, const Duration(seconds: 60));
+      _code.clear();
+      _flowId = null;
+      await _done(r);
+    } on RpcError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _done(Map<String, dynamic> r) async {
+    final added = r['added'] as Map?;
+    if (!mounted) return;
+    if (added?['ok'] == true) {
+      showToast(context, tr('cloud_added'));
+      Navigator.of(context).pop(r);
+    } else {
+      setState(() => _error = '${tr('cloud_failed')}: ${added?['error'] ?? ''}');
+      await _load();
+    }
+  }
+
   Future<void> _add() async {
     final key = _key.text.trim();
     if (key.isEmpty) return;
@@ -68,15 +133,7 @@ class _CloudAiScreenState extends State<CloudAiScreen> {
         if (_preset == 'custom') 'url': _url.text.trim(),
       }, const Duration(seconds: 40));
       _key.clear();
-      final added = r['added'] as Map?;
-      if (!mounted) return;
-      if (added?['ok'] == true) {
-        showToast(context, tr('cloud_added'));
-        Navigator.of(context).pop(r);
-      } else {
-        setState(() => _error = '${tr('cloud_failed')}: ${added?['error'] ?? ''}');
-        await _load();
-      }
+      await _done(r);
     } on RpcError catch (e) {
       if (mounted) setState(() => _error = e.message);
     } finally {
@@ -111,7 +168,7 @@ class _CloudAiScreenState extends State<CloudAiScreen> {
               for (final a in _accounts)
                 Tile(
                   title: a['name'] as String,
-                  subtitle: '${a['keyHint']} · ${a['baseUrl']}',
+                  subtitle: '${a['auth'] == 'oauth' ? tr('via_account') : tr('api_key')} ${a['keyHint']} · ${a['baseUrl']}',
                   icon: Ic.cloud,
                   iconColor: const Color(0xFF5E5CE6),
                   chevron: false,
@@ -124,10 +181,36 @@ class _CloudAiScreenState extends State<CloudAiScreen> {
                 title: e.value,
                 chevron: false,
                 trailing: _preset == e.key ? Icon(Ic.check.data, color: p.accent) : null,
-                onTap: () => setState(() => _preset = e.key),
+                onTap: () => setState(() {
+                  _preset = e.key;
+                  _flowId = null;
+                }),
               ),
           ]),
-          Section(header: tr('api_key'), children: [
+          if (_current?['oauth'] == true)
+            Section(header: tr('signin_title'), footer: tr('signin_note'), children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: PrimaryButton(
+                  id: 'cloud-signin',
+                  icon: Ic.link,
+                  label: tr('signin_with').replaceAll('{0}', _current!['name'] as String),
+                  secondary: _flowId != null,
+                  onPressed: _busy ? null : _startSignIn,
+                ),
+              ),
+              if (_flowId != null) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: AdaptiveTextField(controller: _code, placeholder: tr('signin_code'), prefix: Ic.key, onSubmitted: (_) => _finishSignIn()),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: PrimaryButton(id: 'cloud-signin-finish', label: tr('signin_finish'), onPressed: _busy ? null : _finishSignIn),
+                ),
+              ],
+            ]),
+          Section(header: _current?['oauth'] == true ? tr('or_api_key') : tr('api_key'), children: [
             if (_preset == 'custom')
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
@@ -143,10 +226,7 @@ class _CloudAiScreenState extends State<CloudAiScreen> {
                 subtitle: _current!['keyUrl'] as String,
                 icon: Ic.link,
                 chevron: false,
-                onTap: () async {
-                  await Clipboard.setData(ClipboardData(text: _current!['keyUrl'] as String));
-                  if (context.mounted) showToast(context, tr('copied'));
-                },
+                onTap: () => _open(_current!['keyUrl'] as String),
               ),
           ]),
           if (_error != null)

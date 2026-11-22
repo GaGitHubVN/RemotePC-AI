@@ -112,6 +112,20 @@ void main() {
     final ping = await link.call('ping', {'t': 1});
     expect(ping, isA<Map<String, dynamic>>());
 
+    // ---- cloud AI account sign-in (PKCE against the real Core; no browser, no network) ----
+    final cloud = await link.call('ai.cloud.list');
+    final presets = List<Map<String, dynamic>>.from(cloud['presets'] as List);
+    expect(presets.firstWhere((p) => p['id'] == 'openrouter')['oauth'], true);
+    expect(presets.firstWhere((p) => p['id'] == 'anthropic')['oauth'], false);
+    final start = await link.call('ai.cloud.signin.start', {'preset': 'openrouter'});
+    final authUrl = Uri.parse(start['url'] as String);
+    expect(authUrl.host, 'openrouter.ai');
+    expect(authUrl.queryParameters['code_challenge_method'], 'S256');
+    expect(authUrl.queryParameters.containsKey('code_verifier'), false);
+    expect(start['flowId'], isNotEmpty);
+    await expectLater(link.call('ai.cloud.signin.finish', {'flowId': 'not-a-flow', 'code': 'abcdef'}), throwsA(isA<RpcError>()));
+    print('cloud sign-in start: ${authUrl.host}${authUrl.path} S256 ok');
+
     // ---- chat (RPC ai.status; no local model on CI) ----
     Navigator.of(t.element(find.byType(app.RootShell, skipOffstage: false)), rootNavigator: true).pop();
     await settle(t);

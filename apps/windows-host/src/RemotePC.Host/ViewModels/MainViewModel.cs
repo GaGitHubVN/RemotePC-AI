@@ -43,6 +43,7 @@ public sealed partial class DeviceVm : ObservableObject
 
 public sealed record SessionRow(string Id, string Device, string Started, string Display, string Stream, string Rtt);
 public sealed record ProviderRow(string Name, string Endpoint, bool Running, string Status);
+public sealed record CloudRow(string Id, string Name, string Detail);
 public sealed record ModelRow(string ProviderId, string Id, string Context, string Tools, string Vision, string Size, bool Selected);
 public sealed record TaskRow(string Id, string Request, string State, string Steps, string Device);
 
@@ -93,6 +94,8 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<SessionRow> SessionsList { get; } = [];
     public ObservableCollection<ProviderRow> Providers { get; } = [];
     public ObservableCollection<ModelRow> Models { get; } = [];
+    public ObservableCollection<CloudRow> CloudAccounts { get; } = [];
+    [ObservableProperty] private bool _hasCloud;
     public ObservableCollection<TaskRow> Tasks { get; } = [];
     public ObservableCollection<ActivityEntry> Activity { get; } = [];
     public ObservableCollection<string> Roots { get; } = [];
@@ -179,6 +182,13 @@ public sealed partial class MainViewModel : ObservableObject
             Models.Add(new ModelRow(m.ProviderId, m.Id, m.ContextLength?.ToString("N0") ?? L["ai.unknown"], Tri(m.Tools), Tri(m.Vision),
                 m.SizeBytes is { } b ? $"{b / 1073741824.0:F1} GB" : "", sel?.Provider.Id == m.ProviderId && _rt.Ai.Config.ModelId == m.Id));
         }
+        CloudAccounts.Clear();
+        foreach (var c in _rt.Ai.Config.CloudEndpoints)
+        {
+            var st = statuses.FirstOrDefault(s => s.Id == c.Id);
+            CloudAccounts.Add(new CloudRow(c.Id, c.Name, $"{(c.Auth == "oauth" ? L["cloud.viaAccount"] : "API key")} …{c.KeyHint} · {(st?.Running == true ? L["dash.online"] : st?.Error ?? "—")}"));
+        }
+        HasCloud = CloudAccounts.Count > 0;
         AiStatus = statuses.Any(p => p.Running) ? string.Join(", ", statuses.Where(p => p.Running).Select(p => p.Name)) : L["dash.offline"];
         SelectedModel = _rt.Ai.Config.ModelId ?? L["ai.noModel"];
 
@@ -272,6 +282,17 @@ public sealed partial class MainViewModel : ObservableObject
 
     [RelayCommand] private async Task ScanProviders() { await _rt.Ai.ScanAsync(CancellationToken.None); await _rt.Ai.RefreshModelsAsync(CancellationToken.None); }
     [RelayCommand] private async Task RefreshModels() => await _rt.Ai.RefreshModelsAsync(CancellationToken.None);
+
+    [RelayCommand]
+    private void AddCloud() => new Views.CloudAiWindow(_rt) { Owner = Application.Current.MainWindow }.ShowDialog();
+
+    [RelayCommand]
+    private void RemoveCloud(CloudRow c)
+    {
+        if (MessageBox.Show($"{L["cloud.remove"]}: {c.Name}?", "RemotePC AI", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+        _rt.Ai.RemoveCloud(c.Id);
+        _rt.Log.Write("ai", $"cloud AI account removed: {c.Name}");
+    }
 
     [RelayCommand]
     private void SelectModel(ModelRow? m)
