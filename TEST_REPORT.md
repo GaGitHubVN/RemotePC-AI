@@ -58,6 +58,20 @@ order, candidates queued), list rows hidden under translucent navigation bars, m
 | Cloudflare Worker | **BUILD PASSED** (bundle) | `wrangler deploy --dry-run`; runtime **NOT VERIFIED** |
 | Signaling Docker image / TURN compose | **NOT VERIFIED** | Docker not installed on the dev PC |
 
+## v0.5.0 (2026-11-22) — cloud AI account sign-in
+
+| Check | Result |
+|---|---|
+| Unit tests (dev PC) | Core 109/109, Platform.Windows 12/12, Flutter 8/8 — PASSED |
+| New `CloudSignInTests` | PKCE (RFC 7636 vector), single-use flows, verifier never in URL, encrypted key, loopback state check — PASSED |
+| Real OpenRouter endpoints (no account) | auth URL accepted (redirects to sign-up/login); exchange with an invalid code → 400 "Invalid code" (handled) |
+| Full sign-in with a real OpenRouter account | NOT VERIFIED (needs your account) |
+| PC app UI | AI page "Cloud AI" card and "Add cloud AI" dialog checked by screenshot |
+| Mobile E2E run 45005546457 (iOS 26, iOS 18, Android) | PASSED, including `ai.cloud.signin.start` against the real Core (iOS 26 runner: screenshot helper timed out, non-fatal) |
+| IPA run 45005580577 | 0.5.0 build 5, iphoneos26.2, sha256 7cd09118…87e6fa239d |
+| APK | sha256 5b6ba8a5…47d1ea5b5 |
+| Windows portable | zip d2abe736…37cb58f0, exe e16fb12b…bd001d79, `--smoke-test` exit 0 |
+
 ## v0.4.0 (2026-11-22)
 
 | Check | Result |

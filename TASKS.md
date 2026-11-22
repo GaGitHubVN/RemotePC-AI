@@ -19,6 +19,7 @@ see TEST_REPORT), not yet on physical phones.
 | Host | Input (SendInput, Unicode, combos, release on disconnect) | TEST PASSED (Unicode via UIA readback) |
 | Host | Clipboard (manual) | TEST PASSED |
 | Host | AI connector (Ollama, OpenAI-compatible) | TEST PASSED (Ollama real; OpenAI-compatible with canned SSE) |
+| Host/Mobile | Cloud AI: API key (9 services + custom URL) and OpenRouter account sign-in (PKCE) | TEST PASSED (unit + E2E start); real-account sign-in NOT VERIFIED |
 | Host | Agent engine + tools | TEST PASSED (scripted model); real 0.5B model TEST FAILED |
 | Host | File transfer + file manager | TEST PASSED |
 | Host | WPF UI (9 sections, vi/en, themes, banner, dialogs) | BUILD PASSED (manual smoke check of dashboard) |
