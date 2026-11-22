@@ -24,9 +24,13 @@ Future<void> main() async {
   // Optionally show each frame as soon as it is decoded instead of holding it for the jitter-buffer target
   // (WebRTC-ForcePlayoutDelay 0 ms). A field trial: it must be set before the first peer connection exists, and
   // no connection is made before AppState.init has finished.
-  try {
-    await WebRTC.initialize(options: {'zeroPlayoutDelay': AppState.instance.zeroDelay});
-  } catch (_) {}
+  // Only when enabled: an explicit initialize builds the WebRTC factory through a different path than the lazy
+  // default, and with it the iOS 26 simulator decoded no video at all (even with the option off).
+  if (AppState.instance.zeroDelay) {
+    try {
+      await WebRTC.initialize(options: {'zeroPlayoutDelay': true});
+    } catch (_) {}
+  }
   PlatformUi.setThemeMode(AppState.instance.themeMode);
 }
 
