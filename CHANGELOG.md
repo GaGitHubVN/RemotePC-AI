@@ -11,15 +11,22 @@ User report on 0.3.0: wants a steady 60 fps, lowest possible latency; taps on th
   compresses the current one; only the newest frame is kept (no queue = no added delay). Frames are paced on an
   exact 1/fps grid and a fresh frame waits only until its slot. Dev PC (Intel QSV, changing desktop): 1080p
   57 → 61 fps, 900p 61 fps, 720p 61 fps; capture→encoded p50 14–18 ms, p95 24–26 ms (`StreamBenchmark`).
-- Phone shows every video frame as soon as it is decoded (`zeroPlayoutDelay`: WebRTC jitter-buffer playout delay
-  pinned to 0 ms) instead of holding frames back to smooth the stream.
+- New setting "Show frames instantly (lowest latency)": WebRTC playout delay pinned to 0 ms, each frame shown as
+  soon as it is decoded. On by default on Android, off on iOS: enabling it requires an explicit
+  `WebRTC.initialize`, and with that call the iOS 26 simulator decoded no video (3 runs). Takes effect after
+  reopening the app.
 
 ### Fixed
 - Tap → click was delayed ~300 ms: the remote view listened for double-taps, so Flutter held every single tap to
   see whether a second followed. Taps are now sent immediately; a quick second tap reuses the first tap's point so
   Windows still recognises a double-click.
-- iOS 26 toolbar: on narrow iPhones the buttons sat in a ScrollView, which delays touches (~150 ms). It now uses
-  smaller buttons instead of scrolling.
+- iOS 26 toolbar: on narrow iPhones the buttons sat in a ScrollView, which delays touches (~150 ms). It is now
+  one centered row whose button size follows the screen width.
+- iOS: the engine sometimes reports a negative keyboard inset (-514/-1664 px on the iOS 18 simulator after the
+  full-screen remote view); Flutter turned it into a huge bottom padding and the Chat screen's layout failed.
+  Insets are clamped at the app root.
+- Stats/diagnostics now include RTP packets/bytes received, key frames decoded, PLI and NACK counts; the E2E test
+  prints them when video does not start.
 
 ## 0.3.0 — 2026-11-21 (pre-release)
 

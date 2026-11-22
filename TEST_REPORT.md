@@ -58,6 +58,16 @@ order, candidates queued), list rows hidden under translucent navigation bars, m
 | Cloudflare Worker | **BUILD PASSED** (bundle) | `wrangler deploy --dry-run`; runtime **NOT VERIFIED** |
 | Signaling Docker image / TURN compose | **NOT VERIFIED** | Docker not installed on the dev PC |
 
+## v0.4.0 (2026-11-22)
+
+| Check | Result |
+|---|---|
+| `StreamBenchmark` on the dev PC (Intel QSV, desktop changing every frame) | **TEST PASSED**: 1080p 61 fps (was 57 at 60 fps; default was capped at 30), 900p 61, 720p 61; capture→encoded p50 14–18 ms, p95 24–26 ms |
+| Core (105) / Platform (12) / Flutter unit (8) | **TEST PASSED** (the real-Ollama agent test is non-deterministic with the 0.5B model) |
+| Mobile E2E, commit c94f6e3, two consecutive runs (44996031440, 44997159943) | **TEST PASSED** on iOS 26.5, iOS 18.6 and Android |
+| IPA 0.4.0 build 4 (run 44997162704, macos-15, Xcode 26.3) | **BUILD PASSED**, SHA-256 `37448644…54f55b0d` |
+| 60 fps and latency on a real phone | **NOT VERIFIED** |
+
 ## Real device (reported by the user)
 
 | Device | Build | Result |
